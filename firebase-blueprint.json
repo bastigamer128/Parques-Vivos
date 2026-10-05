@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "activity": {
+      "title": "Activity",
+      "description": "Actividad comunitaria grupal en Parque Almagro",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "locationName": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "date": { "type": "string" },
+        "rawDate": { "type": "string" },
+        "category": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "creatorRole": { "type": "string" },
+        "creatorAvatar": { "type": "string" },
+        "creatorUid": { "type": "string" },
+        "attendeesCount": { "type": "number" },
+        "attendeeUids": { "type": "array" },
+        "status": { "type": "string" },
+        "safetyTip": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "locationName", "lat", "lng", "category", "creatorName"]
+    },
+    "forumPost": {
+      "title": "ForumPost",
+      "description": "Hilo de conversación vecinal en el foro",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorBadge": { "type": "string" },
+        "authorUid": { "type": "string" },
+        "timeAgo": { "type": "string" },
+        "category": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "likes": { "type": "number" },
+        "likedBy": { "type": "array" },
+        "commentsCount": { "type": "number" },
+        "comments": { "type": "array" },
+        "tag": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["authorName", "category", "content"]
+    }
+  },
+  "firestore": {
+    "defaultRules": "read-write-authenticated"
+  }
+}

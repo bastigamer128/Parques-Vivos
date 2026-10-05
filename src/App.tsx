@@ -27,6 +27,19 @@ import {
   createCalendarEvent, 
   deleteCalendarEvent 
 } from './services/calendarService';
+import {
+  seedInitialDataIfEmpty,
+  subscribeToActivities,
+  subscribeToForumPosts,
+  createRealtimeActivity,
+  updateRealtimeAttendance,
+  createRealtimeForumPost,
+  deleteRealtimeForumPost,
+  toggleRealtimePostLike,
+  addRealtimeComment,
+  toggleRealtimeCommentLike,
+  getDeviceId,
+} from './services/realtimeService';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -123,10 +136,58 @@ export default function App() {
   const [calendarUser, setCalendarUser] = useState<any>(null);
   const [isCalendarConnected, setIsCalendarConnected] = useState<boolean>(false);
   const [calendarToken, setCalendarToken] = useState<string | null>(null);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
   const [syncedCalendarEvents, setSyncedCalendarEvents] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem('parques_vivos_calendar_synced');
     return saved ? JSON.parse(saved) : {};
   });
+
+  // Real-Time Online Multi-Device Firestore Synchronization
+  useEffect(() => {
+    // 1. Seed initial verified activities and forum threads if database is fresh
+    seedInitialDataIfEmpty().catch((err) => console.error('Seed error:', err));
+
+    // 2. Real-time listener for activities across all devices
+    const unsubscribeActivities = subscribeToActivities(
+      (liveActivities) => {
+        setIsRealtimeConnected(true);
+        setActivities((prev) => {
+          // Merge local attendance status with live attendee counts
+          const deviceId = getDeviceId();
+          return liveActivities.map((liveAct) => {
+            const localMatch = prev.find((p) => p.id === liveAct.id);
+            return {
+              ...liveAct,
+              isAttending: localMatch ? localMatch.isAttending : liveAct.isAttending,
+            };
+          });
+        });
+      },
+      () => setIsRealtimeConnected(false)
+    );
+
+    // 3. Real-time listener for forum posts and threads across all devices
+    const unsubscribePosts = subscribeToForumPosts(
+      (livePosts) => {
+        setIsRealtimeConnected(true);
+        setPosts((prev) => {
+          return livePosts.map((livePost) => {
+            const localMatch = prev.find((p) => p.id === livePost.id);
+            return {
+              ...livePost,
+              isLiked: localMatch ? localMatch.isLiked : livePost.isLiked,
+            };
+          });
+        });
+      },
+      () => setIsRealtimeConnected(false)
+    );
+
+    return () => {
+      unsubscribeActivities();
+      unsubscribePosts();
+    };
+  }, []);
 
   // Persist synced calendar event mapping
   useEffect(() => {
@@ -253,6 +314,11 @@ export default function App() {
       prev.map((a) => (a.id === activityId ? updated : a))
     );
 
+    // Sync attendance in real-time across devices
+    updateRealtimeAttendance(activityId, newAttending).catch((err) =>
+      console.error('Realtime attendance error:', err)
+    );
+
     if (selectedActivity?.id === activityId) {
       setSelectedActivity(updated);
     }
@@ -289,7 +355,7 @@ export default function App() {
     }
   };
 
-  // Create New Activity with Automatic Google Calendar Sync!
+  // Create New Activity with Automatic Google Calendar Sync & Real-time Broadcast!
   const handleCreateActivity = async (
     newActData: Omit<Activity, 'id' | 'attendeesCount' | 'isAttending' | 'status'>
   ) => {
@@ -310,6 +376,11 @@ export default function App() {
 
     setSelectedActivity(newActivity);
 
+    // Broadcast to Firestore for all connected devices
+    createRealtimeActivity(newActivity).catch((err) =>
+      console.error('Realtime activity creation error:', err)
+    );
+
     // If Google Calendar is linked, automatically add the created event to the user's calendar!
     if (isCalendarConnected) {
       showToast('Publicando y sincronizando con Google Calendar...');
@@ -328,8 +399,11 @@ export default function App() {
     }
   };
 
-  // Toggle Like on Forum Post
+  // Toggle Like on Forum Post with Real-Time sync
   const handleToggleLike = (postId: string) => {
+    const targetPost = posts.find((p) => p.id === postId);
+    const currentlyLiked = targetPost ? Boolean(targetPost.isLiked) : false;
+
     setPosts((prev) =>
       prev.map((post) => {
         if (post.id === postId) {
@@ -343,9 +417,14 @@ export default function App() {
         return post;
       })
     );
+
+    // Sync to Firestore in real-time
+    toggleRealtimePostLike(postId, currentlyLiked).catch((err) =>
+      console.error('Realtime like error:', err)
+    );
   };
 
-  // Add Forum Post with optional image
+  // Add Forum Post with optional image & Real-Time broadcast
   const handleAddPost = (
     category: 'Ideas' | 'Reseñas' | 'Panorama',
     content: string,
@@ -369,16 +448,28 @@ export default function App() {
     };
 
     setPosts((prev) => [newPost, ...prev]);
+
+    // Broadcast new thread to all devices via Firestore
+    createRealtimeForumPost(newPost).catch((err) =>
+      console.error('Realtime post creation error:', err)
+    );
+
     showToast('🎉 ¡Hilo publicado con éxito en el foro vecinal!');
   };
 
-  // Delete Forum Post (author only)
+  // Delete Forum Post (author only) with Real-Time sync
   const handleDeletePost = (postId: string) => {
     setPosts((prev) => prev.filter((p) => p.id !== postId));
+
+    // Delete from Firestore so it disappears for all devices
+    deleteRealtimeForumPost(postId).catch((err) =>
+      console.error('Realtime delete error:', err)
+    );
+
     showToast('🗑️ Tu hilo ha sido eliminado correctamente.');
   };
 
-  // Add Comment / Thread Reply to a Post
+  // Add Comment / Thread Reply to a Post with Real-Time sync
   const handleAddComment = (
     postId: string,
     content: string,
@@ -411,10 +502,15 @@ export default function App() {
       })
     );
 
+    // Sync new comment to Firestore
+    addRealtimeComment(postId, newComment).catch((err) =>
+      console.error('Realtime comment error:', err)
+    );
+
     showToast('¡Tu respuesta se publicó en el hilo!');
   };
 
-  // Toggle Like on a Comment
+  // Toggle Like on a Comment with Real-Time sync
   const handleToggleCommentLike = (postId: string, commentId: string) => {
     setPosts((prev) =>
       prev.map((post) => {
@@ -436,6 +532,11 @@ export default function App() {
         }
         return post;
       })
+    );
+
+    // Sync comment like to Firestore
+    toggleRealtimeCommentLike(postId, commentId).catch((err) =>
+      console.error('Realtime comment like error:', err)
     );
   };
 
@@ -467,6 +568,7 @@ export default function App() {
         calendarUserEmail={calendarUser?.email}
         onConnectCalendar={handleConnectCalendar}
         onDisconnectCalendar={handleDisconnectCalendar}
+        isRealtimeConnected={isRealtimeConnected}
       />
 
       {/* Main Content View Container - Mobile First Centered Layout */}

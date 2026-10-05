@@ -10,6 +10,7 @@ interface HeaderProps {
   calendarUserEmail?: string | null;
   onConnectCalendar: () => void;
   onDisconnectCalendar: () => void;
+  isRealtimeConnected?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -21,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   calendarUserEmail,
   onConnectCalendar,
   onDisconnectCalendar,
+  isRealtimeConnected = true,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-emerald-800 text-white shadow-md">
@@ -33,9 +35,20 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
           <span>Parque Almagro • Santiago Centro</span>
         </div>
-        <div className="flex items-center gap-1 text-[11px] bg-emerald-700/50 px-2 py-0.5 rounded-full text-emerald-100">
-          <Shield className="w-3 h-3 text-emerald-300" />
-          <span>{activeCount} grupos activos</span>
+        <div className="flex items-center gap-1.5">
+          {isRealtimeConnected && (
+            <div 
+              className="flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-400/20 text-emerald-200 border border-emerald-400/40 text-[9px] font-extrabold tracking-wide"
+              title="Sincronización en tiempo real activa entre dispositivos"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>ONLINE</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1 text-[11px] bg-emerald-700/50 px-2 py-0.5 rounded-full text-emerald-100">
+            <Shield className="w-3 h-3 text-emerald-300" />
+            <span>{activeCount} grupos</span>
+          </div>
         </div>
       </div>
 
