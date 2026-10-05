@@ -11,6 +11,10 @@
 </p>
 
 <p align="center">
+  <a href="https://parques-vivos.vercel.app"><img src="https://img.shields.io/badge/Web_App-parques--vivos.vercel.app-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live App on Vercel" /></a>
+</p>
+
+<p align="center">
   <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black" alt="React 19" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://vitejs.dev/"><img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite" /></a>
