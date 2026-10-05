@@ -207,7 +207,7 @@ Para consultas académicas, colaboración comunitaria, retroalimentación técni
 - **Correo Electrónico Institucional:** [`bastian.nazif@ug.uchile.cl`](mailto:bastian.nazif@ug.uchile.cl)
 - **Facultad:** Facultad de Ciencias Físicas y Matemáticas (FCFM)
 - **Universidad:** Universidad de Chile
-- **Ubicación:** Santiago, Chile
+- **Ubicación:** Beauchef 851
 
 ---
 
@@ -217,4 +217,5 @@ Este proyecto es de código abierto bajo la licencia **MIT**. Puedes usarlo, ada
 
 ---
 
-*Desarrollado con ❤️ y vocación pública desde Beauchef (FCFM - Universidad de Chile) para los vecinos del barrio San Diego, Lord Cochrane, Nataniel Cox y Parque Almagro.*
+Proyecto desarrollado por el grupo “Los dominantes II” para el ramo académico Proyectos de Innovación en Ingeniería y ciencias-CD1201-4
+
