@@ -132,6 +132,31 @@ export const InviteNeighborModal: React.FC<InviteNeighborModalProps> = ({
             </div>
           </div>
 
+          {/* Social Share Card Preview */}
+          <div className="text-left bg-stone-50 rounded-2xl p-3 border border-stone-200 space-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 block">
+              Vista previa al compartir en redes (WhatsApp / Redes)
+            </span>
+            <div className="rounded-xl overflow-hidden border border-stone-200 bg-white shadow-xs">
+              <img
+                src="/fcfm_logo.jpg"
+                alt="Logo FCFM Universidad de Chile"
+                className="w-full h-24 object-cover object-center bg-white border-b border-stone-100"
+              />
+              <div className="p-2.5">
+                <span className="text-[10px] font-medium text-stone-400 block uppercase tracking-wider">
+                  parques-vivos.vercel.app
+                </span>
+                <p className="text-xs font-bold text-stone-800 leading-tight">
+                  Parques Vivos - Parque Almagro
+                </p>
+                <p className="text-[11px] text-stone-500 line-clamp-2 mt-0.5 leading-snug">
+                  Plataforma comunitaria para coordinar actividades grupales y recuperar la seguridad y vida de barrio.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Copy link input */}
           <div className="space-y-1 text-left">
             <label className="text-[11px] font-bold text-stone-600 uppercase tracking-wider block">

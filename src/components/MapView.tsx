@@ -9,7 +9,8 @@ import {
 import { 
   Plus, Compass, Navigation, Users, MapPin, 
   Sparkles, CheckCircle2, ChevronRight, AlertTriangle, 
-  Crosshair, X, Edit3, Save, RotateCcw, Check, Move
+  Crosshair, X, Edit3, Save, RotateCcw, Check, Move,
+  ChevronUp, ChevronDown
 } from 'lucide-react';
 
 interface MapViewProps {
@@ -101,8 +102,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const [isEditingBoundaries, setIsEditingBoundaries] = useState<boolean>(false);
   const [boundarySaveToast, setBoundarySaveToast] = useState<boolean>(false);
 
-  // Recommendations carousel visibility toggle
-  const [isCarouselVisible, setIsCarouselVisible] = useState<boolean>(true);
+  // Recommendations carousel visibility toggle (minimized by default for clean home view)
+  const [isCarouselVisible, setIsCarouselVisible] = useState<boolean>(false);
 
   // Real GPS location state
   const [userLocation, setUserLocation] = useState<{
@@ -927,19 +928,21 @@ export const MapView: React.FC<MapViewProps> = ({
       {!isPlacingActivity && !isEditingBoundaries && filteredActivities.length > 0 && (
         <div className="absolute bottom-20 left-0 right-0 z-20 px-3 pointer-events-none">
           {isCarouselVisible ? (
-            <div className="space-y-1">
+            <div className="space-y-1.5 animate-in fade-in slide-in-from-bottom-4 duration-200">
               {/* Carousel header bar with collapse toggle */}
               <div className="flex items-center justify-between px-1 pointer-events-auto">
-                <span className="text-[10px] font-black tracking-wide uppercase text-stone-700 bg-white/90 backdrop-blur-xs px-2.5 py-0.5 rounded-full shadow-xs border border-stone-200/60">
-                  Actividades en el parque ({filteredActivities.length})
+                <span className="text-[10px] font-black tracking-wide uppercase text-stone-700 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full shadow-md border border-stone-200/80 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-orange-500" />
+                  <span>Recomendaciones del parque ({filteredActivities.length})</span>
                 </span>
                 <button 
                   onClick={() => setIsCarouselVisible(false)}
-                  className="text-[10px] font-bold text-stone-600 bg-white/90 backdrop-blur-xs hover:bg-stone-100 px-2 py-0.5 rounded-full shadow-xs border border-stone-200/60 flex items-center gap-1 active:scale-95 transition-all"
+                  className="text-[11px] font-bold text-stone-600 bg-white/95 backdrop-blur-md hover:bg-stone-100 hover:text-stone-900 px-3 py-1 rounded-full shadow-md border border-stone-200/80 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                   title="Ocultar para ver más mapa"
+                  aria-label="Minimizar recomendaciones"
                 >
                   <span>Minimizar</span>
-                  <X className="w-3 h-3 text-stone-500" />
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-500" />
                 </button>
               </div>
 
@@ -1002,14 +1005,19 @@ export const MapView: React.FC<MapViewProps> = ({
               </div>
             </div>
           ) : (
-            /* Minimized state: pill to expand */
-            <div className="pointer-events-auto">
+            /* Minimized state: Clean pill button to see recommendations */
+            <div className="pointer-events-auto flex items-center">
               <button
                 onClick={() => setIsCarouselVisible(true)}
-                className="bg-white/95 backdrop-blur-xs hover:bg-white text-stone-800 font-black text-xs px-3.5 py-2 rounded-2xl shadow-xl border border-stone-200/90 flex items-center gap-2 active:scale-95 transition-all"
+                className="bg-white/95 backdrop-blur-md hover:bg-white text-stone-800 hover:text-stone-950 font-black text-xs px-4 py-2.5 rounded-2xl shadow-xl border border-stone-200/90 flex items-center gap-2 active:scale-95 transition-all group cursor-pointer"
+                aria-label="Ver recomendaciones de actividades"
+                aria-expanded="false"
               >
-                <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                  <Sparkles className="w-3 h-3" />
+                </div>
                 <span>Ver recomendaciones ({filteredActivities.length})</span>
+                <ChevronUp className="w-3.5 h-3.5 text-stone-400 group-hover:text-stone-700 transition-transform group-hover:-translate-y-0.5" />
               </button>
             </div>
           )}
