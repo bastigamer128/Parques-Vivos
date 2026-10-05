@@ -345,19 +345,22 @@ export default function App() {
     );
   };
 
-  // Add Forum Post
+  // Add Forum Post with optional image
   const handleAddPost = (
     category: 'Ideas' | 'Reseñas' | 'Panorama',
-    content: string
+    content: string,
+    imageUrl?: string
   ) => {
     const newPost: ForumPost = {
       id: `post-${Date.now()}`,
       authorName: user.name,
       authorAvatar: user.avatar,
-      authorBadge: 'Vecino Verificado',
+      authorBadge: 'Tú • Vecino Verificado',
       timeAgo: 'Recién',
       category,
       content,
+      imageUrl,
+      isOwner: true,
       likes: 1,
       isLiked: true,
       commentsCount: 0,
@@ -366,7 +369,13 @@ export default function App() {
     };
 
     setPosts((prev) => [newPost, ...prev]);
-    showToast('¡Publicación compartida con los vecinos!');
+    showToast('🎉 ¡Hilo publicado con éxito en el foro vecinal!');
+  };
+
+  // Delete Forum Post (author only)
+  const handleDeletePost = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    showToast('🗑️ Tu hilo ha sido eliminado correctamente.');
   };
 
   // Add Comment / Thread Reply to a Post
@@ -491,6 +500,7 @@ export default function App() {
             currentUser={user}
             onToggleLike={handleToggleLike}
             onAddPost={handleAddPost}
+            onDeletePost={handleDeletePost}
             onAddComment={handleAddComment}
             onToggleCommentLike={handleToggleCommentLike}
           />

@@ -178,6 +178,34 @@ export const INITIAL_ACTIVITIES: Activity[] = [
 
 export const INITIAL_POSTS: ForumPost[] = [
   {
+    id: 'post-0',
+    authorName: 'Bastián González',
+    authorAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+    authorBadge: 'Tú • Vecino Verificado',
+    timeAgo: 'Hace 30 min',
+    category: 'Panorama',
+    content: 'Comparto una foto del atardecer hoy en la pradera poniente frente a la U. Central. ¡Había mucha gente disfrutando en familia y paseando perritos!',
+    imageUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80',
+    isOwner: true,
+    likes: 18,
+    isLiked: true,
+    commentsCount: 1,
+    tag: '#AtardecerAlmagro',
+    comments: [
+      {
+        id: 'c-0-1',
+        postId: 'post-0',
+        authorName: 'Valeria Castro',
+        authorAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80',
+        authorBadge: 'Instructora Yoga',
+        timeAgo: 'Hace 15 min',
+        content: '¡Qué hermosa foto! La luz dorada sobre los árboles del parque a esa hora es increíble.',
+        likes: 4,
+        isLiked: false
+      }
+    ]
+  },
+  {
     id: 'post-1',
     authorName: 'Camila Rojas',
     authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',

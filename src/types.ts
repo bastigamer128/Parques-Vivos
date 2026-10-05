@@ -42,6 +42,8 @@ export interface ForumPost {
   timeAgo: string;
   category: 'Ideas' | 'Reseñas' | 'Panorama';
   content: string;
+  imageUrl?: string;
+  isOwner?: boolean;
   likes: number;
   isLiked?: boolean;
   commentsCount: number;
