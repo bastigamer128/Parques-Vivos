@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 580" width="100%" height="100%">
+  <defs>
+    <style>
+      .txt-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-weight: 500; fill: #4f5358; letter-spacing: 0.16em; font-size: 28px; }
+      .stroke-shield { stroke: #4f5358; stroke-width: 4.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .stroke-thin { stroke: #4f5358; stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- Background for crisp display -->
+  <rect width="100%" height="100%" fill="#f9f9fa" rx="16"/>
+
+  <!-- Left: Escudo Universidad de Chile -->
+  <g transform="translate(75, 45)">
+    <!-- Sol y Estrella Superior Radiante -->
+    <g transform="translate(100, 60)">
+      <!-- Rayos -->
+      <line x1="0" y1="-50" x2="0" y2="40" class="stroke-shield" stroke-width="3.5" />
+      <line x1="-38" y1="-38" x2="32" y2="32" class="stroke-shield" stroke-width="3" />
+      <line x1="-50" y1="0" x2="45" y2="0" class="stroke-shield" stroke-width="3" />
+      <line x1="-38" y1="38" x2="32" y2="-32" class="stroke-shield" stroke-width="3" />
+      <line x1="-20" y1="-45" x2="20" y2="45" class="stroke-thin" />
+      <line x1="-45" y1="-20" x2="45" y2="20" class="stroke-thin" />
+      <line x1="-45" y1="20" x2="45" y2="-20" class="stroke-thin" />
+      <line x1="-20" y1="45" x2="20" y2="-45" class="stroke-thin" />
+      <!-- Estrella central de 5 puntas -->
+      <path d="M 0,-24 L 6,-7 L 23,-7 L 9,4 L 14,21 L 0,11 L -14,21 L -9,4 L -23,-7 L -6,-7 Z" fill="#f9f9fa" stroke="#4f5358" stroke-width="3.5" stroke-linejoin="round"/>
+    </g>
+
+    <!-- Marco Exterior del Escudo -->
+    <path d="M 5,100 L 195,100 L 195,270 C 195,340 100,380 100,380 C 100,380 5,340 5,270 Z" class="stroke-shield" stroke-width="5" />
+    
+    <!-- División en Cruz -->
+    <line x1="100" y1="100" x2="100" y2="378" class="stroke-shield" />
+    <line x1="6" y1="235" x2="194" y2="235" class="stroke-shield" />
+
+    <!-- Círculo Central Ojo de la Providencia -->
+    <circle cx="100" cy="235" r="28" fill="#f9f9fa" stroke="#4f5358" stroke-width="4.5"/>
+    <polygon points="100,215 119,248 81,248" fill="none" stroke="#4f5358" stroke-width="3.5"/>
+    <ellipse cx="100" cy="236" rx="9" ry="5.5" fill="none" stroke="#4f5358" stroke-width="2.5"/>
+    <circle cx="100" cy="236" r="3.2" fill="#4f5358"/>
+
+    <!-- Cuadrante 1 (Superior Izquierdo): Balanza de la Justicia -->
+    <g transform="translate(52, 160)">
+      <line x1="0" y1="-30" x2="0" y2="35" class="stroke-thin" stroke-width="3.5"/>
+      <line x1="-30" y1="-18" x2="30" y2="-18" class="stroke-thin" stroke-width="3.5"/>
+      <!-- Platillo Izquierdo -->
+      <line x1="-30" y1="-18" x2="-38" y2="8" class="stroke-thin" stroke-width="2"/>
+      <line x1="-30" y1="-18" x2="-22" y2="8" class="stroke-thin" stroke-width="2"/>
+      <path d="M -42,8 Q -30,18 -18,8 Z" fill="none" stroke="#4f5358" stroke-width="3"/>
+      <!-- Platillo Derecho -->
+      <line x1="30" y1="-18" x2="22" y2="8" class="stroke-thin" stroke-width="2"/>
+      <line x1="30" y1="-18" x2="38" y2="8" class="stroke-thin" stroke-width="2"/>
+      <path d="M 18,8 Q 30,18 42,8 Z" fill="none" stroke="#4f5358" stroke-width="3"/>
+      <!-- Pomo / Espada -->
+      <line x1="-10" y1="28" x2="10" y2="28" class="stroke-thin"/>
+      <circle cx="0" cy="35" r="3" fill="#4f5358"/>
+    </g>
+
+    <!-- Cuadrante 2 (Superior Derecho): Caduceo / Vara con Serpiente -->
+    <g transform="translate(148, 165)">
+      <path d="M -3,-35 C 10,-35 15,-20 8,-12 C -2,-4 0,10 12,18 C 16,22 18,30 10,38" fill="none" stroke="#4f5358" stroke-width="4.5" stroke-linecap="round"/>
+      <line x1="0" y1="-40" x2="0" y2="40" class="stroke-thin" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="0" cy="-40" r="5" fill="#4f5358"/>
+    </g>
+
+    <!-- Cuadrante 3 (Inferior Izquierdo): Globo terráqueo, compás y haz luminoso -->
+    <g transform="translate(52, 295)">
+      <!-- Haz de luz -->
+      <line x1="-32" y1="-30" x2="-5" y2="10" stroke="#4f5358" stroke-width="2.5" stroke-dasharray="3,3"/>
+      <line x1="-32" y1="-30" x2="5" y2="-5" stroke="#4f5358" stroke-width="2"/>
+      <line x1="-32" y1="-30" x2="-15" y2="20" stroke="#4f5358" stroke-width="2"/>
+      <polygon points="-32,-30 -30,-22 -38,-24" fill="#4f5358"/>
+      <!-- Globo -->
+      <circle cx="8" cy="10" r="18" fill="none" stroke="#4f5358" stroke-width="3.5"/>
+      <ellipse cx="8" cy="10" rx="9" ry="18" fill="none" stroke="#4f5358" stroke-width="2"/>
+      <line x1="-10" y1="10" x2="26" y2="10" stroke="#4f5358" stroke-width="2"/>
+      <!-- Compás -->
+      <path d="M -22,25 L -10,0 L 2,25" fill="none" stroke="#4f5358" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="-10" cy="0" r="3.5" fill="#4f5358"/>
+    </g>
+
+    <!-- Cuadrante 4 (Inferior Derecho): Libro Abierto -->
+    <g transform="translate(148, 298)">
+      <path d="M -30,-15 C -15,-20 0,-16 0,-10 L 0,22 C 0,16 -15,12 -30,17 Z" fill="none" stroke="#4f5358" stroke-width="3.5"/>
+      <path d="M 30,-15 C 15,-20 0,-16 0,-10 L 0,22 C 0,16 15,12 30,17 Z" fill="none" stroke="#4f5358" stroke-width="3.5"/>
+      <!-- Líneas de texto del libro -->
+      <line x1="-24" y1="-7" x2="-6" y2="-4" stroke="#4f5358" stroke-width="2"/>
+      <line x1="-24" y1="2" x2="-6" y2="5" stroke="#4f5358" stroke-width="2"/>
+      <line x1="-24" y1="11" x2="-6" y2="14" stroke="#4f5358" stroke-width="2"/>
+      <line x1="6" y1="-4" x2="24" y2="-7" stroke="#4f5358" stroke-width="2"/>
+      <line x1="6" y1="5" x2="24" y2="2" stroke="#4f5358" stroke-width="2"/>
+      <line x1="6" y1="14" x2="24" y2="11" stroke="#4f5358" stroke-width="2"/>
+    </g>
+  </g>
+
+  <!-- Barra vertical separadora opcional sutil -->
+  <line x1="315" y1="130" x2="315" y2="390" stroke="#d5d7dc" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Right: Logo Tipográfico "fcfm" -->
+  <g transform="translate(345, 120)">
+    <!-- Letra 'f' inicial gris -->
+    <path d="M 40,75 C 40,35 60,18 92,18 C 105,18 116,22 122,26 L 122,66 C 117,62 109,60 102,60 C 88,60 84,68 84,86 L 84,102 L 122,102 L 122,145 L 84,145 L 84,245 L 36,245 L 36,145 L 6,145 L 6,102 L 36,102 L 36,82 C 36,79 38,76 40,75 Z" fill="#585c62"/>
+    
+    <!-- Letra 'c' gris -->
+    <path d="M 226,105 C 220,98 208,94 196,94 C 162,94 142,120 142,168 C 142,216 162,242 196,242 C 210,242 222,236 228,230 L 228,272 C 218,279 201,283 184,283 C 128,283 94,238 94,168 C 94,98 130,54 186,54 C 203,54 218,59 226,65 Z" fill="#585c62" transform="translate(10, 0)"/>
+
+    <!-- Letra 'f' roja con curva inferior alargada (icónica de Beauchef / FCFM) -->
+    <path d="M 265,75 C 265,30 286,12 322,12 C 336,12 348,16 354,20 L 354,64 C 348,60 338,57 330,57 C 314,57 310,66 310,85 L 310,102 L 354,102 L 354,145 L 310,145 L 310,240 C 310,290 285,325 240,325 C 228,325 214,321 206,316 L 206,270 C 213,275 224,278 234,278 C 255,278 265,262 265,235 L 265,145 L 235,145 L 235,102 L 265,102 Z" fill="#d3101b" transform="translate(20, 0)"/>
+
+    <!-- Letra 'm' gris -->
+    <path d="M 370,100 L 412,100 L 412,128 C 423,108 444,95 470,95 C 496,95 514,108 522,130 C 535,108 558,95 585,95 C 625,95 645,122 645,170 L 645,245 L 598,245 L 598,175 C 598,148 588,136 570,136 C 550,136 540,150 540,175 L 540,245 L 494,245 L 494,175 C 494,148 484,136 466,136 C 446,136 436,150 436,175 L 436,245 L 390,245 L 390,100 Z" fill="#585c62" transform="translate(30, 0)"/>
+  </g>
+
+  <!-- Bottom Text: FACULTAD DE CIENCIAS FÍSICAS Y MATEMÁTICAS UNIVERSIDAD DE CHILE -->
+  <text x="400" y="465" text-anchor="middle" class="txt-title">FACULTAD DE CIENCIAS</text>
+  <text x="400" y="505" text-anchor="middle" class="txt-title">FÍSICAS Y MATEMÁTICAS</text>
+  <text x="400" y="545" text-anchor="middle" class="txt-title" style="letter-spacing: 0.22em; font-weight: 600;">UNIVERSIDAD DE CHILE</text>
+</svg>

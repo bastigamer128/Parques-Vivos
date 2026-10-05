@@ -154,6 +154,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               )}
             </button>
           </div>
+
+          {/* Institutional Credit */}
+          <div className="pt-2 border-t border-stone-100 flex items-center justify-center gap-1.5 text-[11px] text-stone-500 font-medium">
+            <span>Iniciativa desarrollada por estudiantes FCFM</span>
+            <span>•</span>
+            <span className="font-semibold text-stone-700">Universidad de Chile</span>
+          </div>
         </div>
       </div>
     </div>

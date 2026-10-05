@@ -1,11 +1,23 @@
 # 🌳 Parques Vivos — Parque Almagro
 
-[![React](https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com/)
-[![Google Calendar](https://img.shields.io/badge/Google_Calendar-Integrated-4285F4?logo=googlecalendar&logoColor=white)](https://calendar.google.com/)
+<p align="center">
+  <img src="docs/fcfm_logo.svg" alt="Facultad de Ciencias Físicas y Matemáticas - Universidad de Chile" width="460" />
+</p>
+
+<p align="center">
+  <strong>Iniciativa de Innovación Tecnológica y Recuperación Urbana Comunitaria</strong><br />
+  Desarrollado por estudiantes de la <strong>Facultad de Ciencias Físicas y Matemáticas (FCFM)</strong><br />
+  <strong>Universidad de Chile</strong>
+</p>
+
+<p align="center">
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black" alt="React 19" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://vitejs.dev/"><img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite" /></a>
+  <a href="https://tailwindcss.com/"><img src="https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS v4" /></a>
+  <a href="https://leafletjs.com/"><img src="https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white" alt="Leaflet" /></a>
+  <a href="https://ingenieria.uchile.cl/"><img src="https://img.shields.io/badge/FCFM-Universidad_de_Chile-d3101b?logo=google-scholar&logoColor=white" alt="FCFM UChile" /></a>
+</p>
 
 > **"Un parque habitado por sus vecinos es un parque seguro y alegre para todos."**
 
@@ -174,10 +186,32 @@ El sistema utiliza coordenadas geodésicas de alta precisión calibradas sobre *
 
 ---
 
-## 📄 Licencia
+## 🏛️ Desarrollo Académico e Institucional (FCFM - Universidad de Chile)
 
-Este proyecto es de código abierto bajo la licencia **MIT**. Puedes usarlo, adaptarlo y replicarlo para cualquier parque o plaza de tu ciudad.
+Este proyecto está siendo desarrollado por estudiantes de la **Facultad de Ciencias Físicas y Matemáticas (FCFM)** de la **Universidad de Chile** ([Beauchef](https://ingenieria.uchile.cl/)), en el marco de iniciativas de ingeniería de software con compromiso social y ciudadano.
+
+El propósito central es vincular la formación científico-tecnológica de excelencia de la universidad con los desafíos reales de habitabilidad y seguridad del entorno urbano de Santiago, facilitando herramientas digitales abiertas, accesibles y colaborativas para las comunidades barriales.
+
+<p align="center">
+  <img src="docs/fcfm_logo.svg" alt="Logo Oficial FCFM Universidad de Chile" width="380" />
+</p>
+
+### 📬 Contacto y Coordinación del Proyecto
+
+Para consultas académicas, colaboración comunitaria, retroalimentación técnica o vinculación con juntas de vecinos:
+
+- **Responsable / Estudiante:** Bastian Nazif
+- **Correo Electrónico Institucional:** [`bastian.nazif@ug.uchile.cl`](mailto:bastian.nazif@ug.uchile.cl)
+- **Facultad:** Facultad de Ciencias Físicas y Matemáticas (FCFM)
+- **Universidad:** Universidad de Chile
+- **Ubicación:** Santiago, Chile
 
 ---
 
-*Desarrollado con ❤️ para la comunidad del barrio San Diego, Lord Cochrane, Nataniel Cox y Parque Almagro.*
+## 📄 Licencia
+
+Este proyecto es de código abierto bajo la licencia **MIT**. Puedes usarlo, adaptarlo y replicarlo libremente para cualquier parque o plaza de tu comuna o ciudad.
+
+---
+
+*Desarrollado con ❤️ y vocación pública desde Beauchef (FCFM - Universidad de Chile) para los vecinos del barrio San Diego, Lord Cochrane, Nataniel Cox y Parque Almagro.*
