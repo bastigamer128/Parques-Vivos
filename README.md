@@ -200,7 +200,6 @@ El propósito central es vincular la formación científico-tecnológica de exce
 
 Para consultas académicas, colaboración comunitaria, retroalimentación técnica o vinculación con juntas de vecinos:
 
-- **Responsable / Estudiante:** Bastian Nazif
 - **Correo Electrónico Institucional:** [`bastian.nazif@ug.uchile.cl`](mailto:bastian.nazif@ug.uchile.cl)
 - **Facultad:** Facultad de Ciencias Físicas y Matemáticas (FCFM)
 - **Universidad:** Universidad de Chile
