@@ -1,0 +1,6 @@
+{
+  "name": "Parques Vivos - Parque Almagro",
+  "description": "Plataforma comunitaria para coordinar actividades grupales y recuperar la seguridad y vida de barrio en el Parque Almagro, Santiago.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
