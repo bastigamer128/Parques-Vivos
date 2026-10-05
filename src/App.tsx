@@ -170,17 +170,14 @@ export default function App() {
     const unsubscribePosts = subscribeToForumPosts(
       (livePosts) => {
         setIsRealtimeConnected(true);
-        setPosts((prev) => {
-          return livePosts.map((livePost) => {
-            const localMatch = prev.find((p) => p.id === livePost.id);
-            return {
-              ...livePost,
-              isLiked: localMatch ? localMatch.isLiked : livePost.isLiked,
-            };
-          });
-        });
+        if (livePosts.length > 0) {
+          setPosts(livePosts);
+        }
       },
-      () => setIsRealtimeConnected(false)
+      (err) => {
+        console.error('Forum subscription error:', err);
+        setIsRealtimeConnected(false);
+      }
     );
 
     return () => {
