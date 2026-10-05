@@ -48,9 +48,32 @@
         "createdAt": { "type": "string" }
       },
       "required": ["authorName", "category", "content"]
+    },
+    "parkSettings": {
+      "title": "ParkSettings",
+      "description": "Configuración y límites compartidos de las zonas del parque en tiempo real",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "polygonCoords": { "type": "array" },
+        "updatedAt": { "type": "number" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["polygonCoords"]
     }
   },
   "firestore": {
-    "defaultRules": "read-write-authenticated"
+    "/activities/{activityId}": {
+      "schema": "activity",
+      "description": "Actividades comunitarias en Parque Almagro"
+    },
+    "/forum_posts/{postId}": {
+      "schema": "forumPost",
+      "description": "Publicaciones del foro vecinal"
+    },
+    "/park_settings/{settingId}": {
+      "schema": "parkSettings",
+      "description": "Límites georreferenciados del parque compartidos para todos los usuarios"
+    }
   }
 }

@@ -566,6 +566,7 @@ export default function App() {
         onConnectCalendar={handleConnectCalendar}
         onDisconnectCalendar={handleDisconnectCalendar}
         isRealtimeConnected={isRealtimeConnected}
+        showCalendarButton={currentTab === 'calendario'}
       />
 
       {/* Main Content View Container - Mobile First Centered Layout */}

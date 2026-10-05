@@ -67,7 +67,7 @@ El sistema utiliza coordenadas geodésicas de alta precisión calibradas sobre *
 ### 1. Mapa Comunitario Georreferenciado (`MapView.tsx`)
 - **Motor de Renderizado:** Leaflet 1.9 con tiles vectoriales optimizados de OpenStreetMap.
 - **Geocercado con Algoritmo Ray-Casting:** Valida matemáticamente si un punto está dentro del polígono del parque antes de permitir crear una actividad.
-- **Calibración Manual de Límites:** Los administradores o coordinadores pueden ajustar los 12 vértices del polígono arrastrando marcadores numerados a 60 FPS sin recargas pesadas.
+- **Calibración Manual de Límites Sincronizada en la Nube:** Los administradores o vecinos pueden ajustar los vértices del polígono arrastrando marcadores numerados a 60 FPS; los nuevos límites se guardan en Firebase Firestore y se reflejan **en tiempo real para todos los usuarios y dispositivos**.
 - **Carrusel Inferior de Recomendaciones:** Minimizado por defecto para ofrecer una vista limpia y despejada del parque; se despliega con un clic en **"Ver recomendaciones"** y puede volver a minimizarse en cualquier momento.
 - **Botón Flotante (`+ Actividad`) Libre de Interrupciones:** Ubicado estratégicamente por encima de la barra de navegación y con separación vertical limpia sobre las tarjetas de recomendación.
 - **Filtros por Categoría:** Chips temáticos con conteo en vivo (Deporte, Mascotas, Cultura, Seguridad, Infantil, Social).

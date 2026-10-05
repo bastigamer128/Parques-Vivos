@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { Activity, ForumPost, ForumComment, UserProfile } from '../types';
-import { INITIAL_ACTIVITIES, INITIAL_POSTS } from '../data/mockData';
+import { INITIAL_ACTIVITIES, INITIAL_POSTS, PARQUE_ALMAGRO_BOUNDS_POLYGON } from '../data/mockData';
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -164,6 +164,22 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
       }
       await batch.commit();
       console.log('Initial forum posts seeded successfully');
+    }
+
+    const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
+    const boundsSnap = await getDoc(boundariesDocRef);
+    if (!boundsSnap.exists()) {
+      console.log('Seeding initial park boundaries to Firestore...');
+      const serialized = PARQUE_ALMAGRO_BOUNDS_POLYGON.map(([lat, lng]) => ({
+        lat: Number(lat),
+        lng: Number(lng),
+      }));
+      await setDoc(boundariesDocRef, {
+        polygonCoords: serialized,
+        updatedAt: Date.now(),
+        updatedBy: 'system-seed',
+      });
+      console.log('Initial park boundaries seeded successfully');
     }
   } catch (err) {
     console.error('Error during Firestore initial seeding:', err);
@@ -422,4 +438,94 @@ export async function toggleRealtimeCommentLike(
   await updateDoc(docRef, {
     comments: cleanComments,
   });
+}
+
+/**
+ * Real-time subscription to shared park boundaries in Firestore.
+ * Ensures all users across all devices always view the exact same synchronized park limits.
+ */
+export function subscribeToParkBoundaries(
+  onUpdate: (coords: [number, number][]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
+
+  return onSnapshot(
+    boundariesDocRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (Array.isArray(data.polygonCoords) && data.polygonCoords.length >= 3) {
+          const parsedCoords: [number, number][] = data.polygonCoords
+            .map((point: any) => {
+              if (Array.isArray(point)) {
+                return [Number(point[0]), Number(point[1])] as [number, number];
+              }
+              if (point && typeof point === 'object' && 'lat' in point && 'lng' in point) {
+                return [Number(point.lat), Number(point.lng)] as [number, number];
+              }
+              return [0, 0] as [number, number];
+            })
+            .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0);
+
+          if (parsedCoords.length >= 3) {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('parques_vivos_custom_polygon_v3', JSON.stringify(parsedCoords));
+            }
+            onUpdate(parsedCoords);
+          }
+        }
+      }
+    },
+    (err) => {
+      console.error('Firestore park boundaries snapshot error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Save updated park perimeter boundaries to Firestore so all users see the update in real-time.
+ */
+export async function saveRealtimeParkBoundaries(
+  coords: [number, number][]
+): Promise<void> {
+  const deviceId = getDeviceId();
+  const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
+  const serialized = coords.map(([lat, lng]) => ({
+    lat: Number(lat),
+    lng: Number(lng),
+  }));
+
+  await setDoc(boundariesDocRef, {
+    polygonCoords: serialized,
+    updatedAt: Date.now(),
+    updatedBy: deviceId,
+  });
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('parques_vivos_custom_polygon_v3', JSON.stringify(coords));
+  }
+}
+
+/**
+ * Reset park perimeter boundaries back to official default in Firestore for all users.
+ */
+export async function resetRealtimeParkBoundaries(): Promise<void> {
+  const deviceId = getDeviceId();
+  const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
+  const serialized = PARQUE_ALMAGRO_BOUNDS_POLYGON.map(([lat, lng]) => ({
+    lat: Number(lat),
+    lng: Number(lng),
+  }));
+
+  await setDoc(boundariesDocRef, {
+    polygonCoords: serialized,
+    updatedAt: Date.now(),
+    updatedBy: deviceId,
+  });
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('parques_vivos_custom_polygon_v3');
+  }
 }

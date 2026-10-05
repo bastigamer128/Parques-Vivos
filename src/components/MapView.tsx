@@ -7,10 +7,15 @@ import {
   PARQUE_ALMAGRO_ZONES
 } from '../data/mockData';
 import { 
+  subscribeToParkBoundaries, 
+  saveRealtimeParkBoundaries, 
+  resetRealtimeParkBoundaries 
+} from '../services/realtimeService';
+import { 
   Plus, Compass, Navigation, Users, MapPin, 
   Sparkles, CheckCircle2, ChevronRight, AlertTriangle, 
   Crosshair, X, Edit3, Save, RotateCcw, Check, Move,
-  ChevronUp, ChevronDown
+  ChevronUp, ChevronDown, Filter, ChevronLeft
 } from 'lucide-react';
 
 interface MapViewProps {
@@ -69,6 +74,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const editHandlesLayerRef = useRef<L.LayerGroup | null>(null);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('todas');
+  // Filters panel toggle (collapsed by default for clean map view)
+  const [isFiltersOpen, setIsFiltersOpen] = useState<boolean>(false);
   
   // Custom Polygon state (stored in localStorage)
   const [parkPolygonCoords, setParkPolygonCoords] = useState<[number, number][]>(() => {
@@ -101,6 +108,22 @@ export const MapView: React.FC<MapViewProps> = ({
   // Mode: Manually calibrating / editing park boundaries
   const [isEditingBoundaries, setIsEditingBoundaries] = useState<boolean>(false);
   const [boundarySaveToast, setBoundarySaveToast] = useState<boolean>(false);
+
+  // Subscribe to real-time shared park boundaries from Firestore
+  useEffect(() => {
+    const unsubscribe = subscribeToParkBoundaries((updatedCoords) => {
+      // Avoid overwriting if this user is currently in the middle of editing/calibrating boundaries
+      if (!isEditingBoundaries) {
+        setParkPolygonCoords(updatedCoords);
+        parkPolygonCoordsRef.current = updatedCoords;
+        if (parkPolygonRef.current) {
+          parkPolygonRef.current.setLatLngs(updatedCoords);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isEditingBoundaries]);
 
   // Recommendations carousel visibility toggle (minimized by default for clean home view)
   const [isCarouselVisible, setIsCarouselVisible] = useState<boolean>(false);
@@ -210,26 +233,37 @@ export const MapView: React.FC<MapViewProps> = ({
     );
   }, [parkPolygonCoords]);
 
-  // Save custom polygon to localStorage
-  const handleSavePolygon = () => {
-    localStorage.setItem('parques_vivos_custom_polygon_v3', JSON.stringify(parkPolygonCoordsRef.current));
-    setParkPolygonCoords([...parkPolygonCoordsRef.current]);
+  // Save custom polygon to Firestore and localStorage so all users share the exact same boundaries
+  const handleSavePolygon = async () => {
+    const current = [...parkPolygonCoordsRef.current];
+    setParkPolygonCoords(current);
     setIsEditingBoundaries(false);
     setBoundarySaveToast(true);
     setTimeout(() => setBoundarySaveToast(false), 3000);
+
+    try {
+      await saveRealtimeParkBoundaries(current);
+    } catch (err) {
+      console.error('Error saving shared park boundaries to Firestore:', err);
+    }
   };
 
-  // Reset polygon to default
-  const handleResetPolygon = () => {
+  // Reset polygon to default in Firestore and localStorage for all users
+  const handleResetPolygon = async () => {
     parkPolygonCoordsRef.current = PARQUE_ALMAGRO_BOUNDS_POLYGON;
     setParkPolygonCoords(PARQUE_ALMAGRO_BOUNDS_POLYGON);
-    localStorage.removeItem('parques_vivos_custom_polygon_v3');
     if (parkPolygonRef.current) {
       parkPolygonRef.current.setLatLngs(PARQUE_ALMAGRO_BOUNDS_POLYGON);
     }
     renderBoundaryHandles(PARQUE_ALMAGRO_BOUNDS_POLYGON);
     setBoundarySaveToast(true);
     setTimeout(() => setBoundarySaveToast(false), 3000);
+
+    try {
+      await resetRealtimeParkBoundaries();
+    } catch (err) {
+      console.error('Error resetting shared park boundaries in Firestore:', err);
+    }
   };
 
   // Render boundary handles without tearing/recreating on every drag event
@@ -675,70 +709,103 @@ export const MapView: React.FC<MapViewProps> = ({
 
   return (
     <div className={`relative w-full h-[calc(100vh-120px)] flex flex-col bg-stone-100 overflow-hidden ${isPlacingActivity ? 'cursor-crosshair' : ''}`}>
-      {/* Top filter chips: Categories & Quick Create */}
-      <div className="absolute top-2 left-0 right-0 z-20 px-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-          {/* Quick Create Activity button right in the top bar */}
+      {/* Top Filter Controls: Same horizontal height inline layout */}
+      <div className="absolute top-2 left-3 right-16 z-20 pointer-events-auto">
+        <div className="flex items-center gap-1.5 max-w-full overflow-x-auto no-scrollbar py-0.5">
+          {/* Main Filter Toggle Button */}
           <button
-            onClick={() => {
-              if (isPlacingActivity) {
-                setIsPlacingActivity(false);
-              } else {
-                setIsPlacingActivity(true);
-                setIsEditingBoundaries(false);
-                setBoundaryAlert(null);
-              }
-            }}
-            className={`px-3 py-1.5 rounded-full text-xs font-black transition-all shadow-md shrink-0 flex items-center gap-1.5 active:scale-95 ${
-              isPlacingActivity
-                ? 'bg-stone-900 text-amber-300 ring-2 ring-amber-400'
-                : 'bg-orange-600 hover:bg-orange-700 text-white shadow-orange-600/30'
+            onClick={() => setIsFiltersOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-black shadow-lg backdrop-blur-md transition-all active:scale-95 border shrink-0 cursor-pointer ${
+              selectedCategory !== 'todas'
+                ? 'bg-emerald-800 text-white border-emerald-600 ring-2 ring-emerald-400/50'
+                : 'bg-white/95 hover:bg-white text-stone-800 border-stone-200/90'
             }`}
-            aria-label="Crear nueva actividad comunitaria"
+            aria-expanded={isFiltersOpen}
+            aria-label="Filtrar actividades por categoría"
           >
-            {isPlacingActivity ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5 stroke-[3]" />}
-            <span>{isPlacingActivity ? 'Cancelar' : '+ Actividad'}</span>
+            <Filter className={`w-3.5 h-3.5 ${selectedCategory !== 'todas' ? 'text-amber-300' : 'text-emerald-700'}`} />
+            <span>
+              {isFiltersOpen
+                ? 'Filtros'
+                : selectedCategory === 'todas'
+                ? 'Filtrar actividades'
+                : CATEGORY_CONFIG[selectedCategory]?.label}
+            </span>
+            {selectedCategory !== 'todas' && (
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+            )}
+            {isFiltersOpen ? (
+              <ChevronLeft className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+            )}
           </button>
 
-          <button
-            onClick={() => setSelectedCategory('todas')}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-md shrink-0 flex items-center gap-1 ${
-              selectedCategory === 'todas'
-                ? 'bg-emerald-700 text-white ring-2 ring-emerald-300'
-                : 'bg-white/95 backdrop-blur-xs text-stone-700 hover:bg-stone-100 border border-stone-200'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Todas ({activities.length})</span>
-          </button>
+          {/* Quick reset button if filtered and folded */}
+          {selectedCategory !== 'todas' && !isFiltersOpen && (
+            <button
+              onClick={() => setSelectedCategory('todas')}
+              className="px-2.5 py-2 rounded-2xl text-[11px] font-bold bg-white/95 hover:bg-white text-stone-600 border border-stone-200/90 shadow-lg backdrop-blur-md active:scale-95 transition-all shrink-0 cursor-pointer"
+              title="Quitar filtro"
+            >
+              Todas ({activities.length})
+            </button>
+          )}
 
-          {Object.entries(CATEGORY_CONFIG).map(([key, config]) => {
-            const count = activities.filter((a) => a.category === key).length;
-            const isSelected = selectedCategory === key;
-            return (
+          {/* In-line Category Chips (unfolds at the exact same horizontal height) */}
+          {isFiltersOpen && (
+            <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in slide-in-from-left-3 duration-200">
               <button
-                key={key}
-                onClick={() => setSelectedCategory(key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-md shrink-0 flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-emerald-700 text-white ring-2 ring-emerald-300'
-                    : 'bg-white/95 backdrop-blur-xs text-stone-700 hover:bg-stone-100 border border-stone-200'
+                onClick={() => setSelectedCategory('todas')}
+                className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all shadow-lg backdrop-blur-md shrink-0 flex items-center gap-1 cursor-pointer border ${
+                  selectedCategory === 'todas'
+                    ? 'bg-emerald-700 text-white border-emerald-600 ring-2 ring-emerald-300'
+                    : 'bg-white/95 hover:bg-white text-stone-700 border-stone-200/90'
                 }`}
               >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: config.color }}
-                />
-                <span>{config.label}</span>
-                <span className="text-[10px] opacity-75 font-semibold">({count})</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Todas ({activities.length})</span>
               </button>
-            );
-          })}
+
+              {Object.entries(CATEGORY_CONFIG).map(([key, config]) => {
+                const count = activities.filter((a) => a.category === key).length;
+                const isSelected = selectedCategory === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedCategory(key)}
+                    className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all shadow-lg backdrop-blur-md shrink-0 flex items-center gap-1.5 cursor-pointer border ${
+                      isSelected
+                        ? 'bg-emerald-700 text-white border-emerald-600 ring-2 ring-emerald-300'
+                        : 'bg-white/95 hover:bg-white text-stone-700 border-stone-200/90'
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: config.color }}
+                    />
+                    <span>{config.label}</span>
+                    <span className="text-[10px] opacity-75 font-semibold">({count})</span>
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setIsFiltersOpen(false)}
+                className="px-2.5 py-2 rounded-2xl text-xs font-bold text-stone-600 hover:text-stone-900 bg-white/95 hover:bg-white border border-stone-200/90 shadow-lg backdrop-blur-md shrink-0 flex items-center gap-1 cursor-pointer transition-colors"
+                title="Replegar filtros"
+                aria-label="Replegar filtros"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 text-stone-500" />
+                <span>Replegar</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Floating Action Buttons Column (Top Right) */}
-      <div className="absolute top-14 right-3 z-20 flex flex-col gap-2">
+      <div className="absolute top-2 right-3 z-20 flex flex-col gap-2">
         {/* GPS Live Location Button */}
         <button
           onClick={() => requestUserLocation(true)}
@@ -840,7 +907,7 @@ export const MapView: React.FC<MapViewProps> = ({
             </div>
 
             <p className="text-xs text-stone-200 leading-snug">
-              Arrastra los círculos verdes numerados en el mapa a las esquinas exactas del parque. Toca el mapa si quieres agregar más puntos.
+              Arrastra los círculos verdes numerados en el mapa a las esquinas exactas del parque. Al guardar, los límites se actualizarán en tiempo real para todos los vecinos.
             </p>
 
             <div className="flex items-center gap-2 pt-1">
@@ -849,7 +916,7 @@ export const MapView: React.FC<MapViewProps> = ({
                 className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>Guardar Límites</span>
+                <span>Guardar para Todos</span>
               </button>
 
               <button
@@ -874,9 +941,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
       {/* BOUNDARY SAVE TOAST CONFIRMATION */}
       {boundarySaveToast && (
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 bg-emerald-800 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2">
+        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-40 bg-emerald-800 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-2 text-center whitespace-nowrap">
           <Check className="w-4 h-4 text-emerald-300" />
-          <span>¡Límites del parque guardados con éxito!</span>
+          <span>¡Límites guardados y sincronizados para todos los vecinos!</span>
         </div>
       )}
 
