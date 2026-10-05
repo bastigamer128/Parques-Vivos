@@ -1,7 +1,7 @@
 # 🌳 Parques Vivos — Parque Almagro
 
 <p align="center">
-  <img src="docs/fcfm_logo.svg" alt="Facultad de Ciencias Físicas y Matemáticas - Universidad de Chile" width="460" />
+  <img src="docs/fcfm_logo.jpg" alt="Logo FCFM - Facultad de Ciencias Físicas y Matemáticas Universidad de Chile" width="460" />
 </p>
 
 <p align="center">
@@ -193,7 +193,7 @@ Este proyecto está siendo desarrollado por estudiantes de la **Facultad de Cien
 El propósito central es vincular la formación científico-tecnológica de excelencia de la universidad con los desafíos reales de habitabilidad y seguridad del entorno urbano de Santiago, facilitando herramientas digitales abiertas, accesibles y colaborativas para las comunidades barriales.
 
 <p align="center">
-  <img src="docs/fcfm_logo.svg" alt="Logo Oficial FCFM Universidad de Chile" width="380" />
+  <img src="docs/fcfm_logo.jpg" alt="Logo Oficial FCFM Universidad de Chile" width="380" />
 </p>
 
 ### 📬 Contacto y Coordinación del Proyecto

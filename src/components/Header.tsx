@@ -41,11 +41,13 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Main Header Bar */}
       <div className="px-3.5 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between gap-2 max-w-lg mx-auto">
-        {/* Brand identity */}
+        {/* Brand identity with official FCFM Logo */}
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 flex items-center justify-center shadow-inner border border-emerald-300/30 shrink-0">
-            <TreePine className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-          </div>
+          <img
+            src="/fcfm_logo.jpg"
+            alt="Logo FCFM - Facultad de Ciencias Físicas y Matemáticas Universidad de Chile"
+            className="h-8 sm:h-9 max-w-[80px] sm:max-w-[95px] object-contain rounded-lg bg-white p-0.5 shadow-sm border border-emerald-300/40 shrink-0"
+          />
           <div className="min-w-0 truncate">
             <div className="flex items-center gap-1">
               <h1 className="font-extrabold text-base sm:text-lg leading-tight tracking-tight text-white truncate">
