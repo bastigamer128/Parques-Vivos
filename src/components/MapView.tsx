@@ -79,7 +79,7 @@ export const MapView: React.FC<MapViewProps> = ({
   
   // Custom Polygon state (stored in localStorage)
   const [parkPolygonCoords, setParkPolygonCoords] = useState<[number, number][]>(() => {
-    const saved = localStorage.getItem('parques_vivos_custom_polygon_v3');
+    const saved = localStorage.getItem('parques_vivos_custom_polygon_v4');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -92,7 +92,8 @@ export const MapView: React.FC<MapViewProps> = ({
     }
     localStorage.removeItem('parques_vivos_custom_polygon');
     localStorage.removeItem('parques_vivos_custom_polygon_v2');
-    localStorage.setItem('parques_vivos_custom_polygon_v3', JSON.stringify(PARQUE_ALMAGRO_BOUNDS_POLYGON));
+    localStorage.removeItem('parques_vivos_custom_polygon_v3');
+    localStorage.setItem('parques_vivos_custom_polygon_v4', JSON.stringify(PARQUE_ALMAGRO_BOUNDS_POLYGON));
     return PARQUE_ALMAGRO_BOUNDS_POLYGON;
   });
 
@@ -217,8 +218,8 @@ export const MapView: React.FC<MapViewProps> = ({
         setIsLocating(false);
         // Fallback simulation near Metro Parque Almagro so user can test location visually
         const simulatedLocation = {
-          lat: -33.44975,
-          lng: -70.65150,
+          lat: -33.45140,
+          lng: -70.65056,
           accuracy: 15,
           isInside: true,
         };
@@ -341,7 +342,7 @@ export const MapView: React.FC<MapViewProps> = ({
     }).addTo(map);
     parkPolygonRef.current = parkBoundary;
 
-    // Landmark: Basílica de los Sacramentinos
+    // Landmark: Basílica de los Sacramentinos (Santa Isabel 1071 con Arturo Prat / San Diego)
     const sacramentinosIcon = L.divIcon({
       className: 'custom-landmark-icon',
       html: `
@@ -352,9 +353,9 @@ export const MapView: React.FC<MapViewProps> = ({
       iconSize: [140, 22],
       iconAnchor: [70, 26],
     });
-    L.marker([-33.45020, -70.65060], { icon: sacramentinosIcon, interactive: false }).addTo(map);
+    L.marker([-33.45132, -70.64905], { icon: sacramentinosIcon, interactive: false }).addTo(map);
 
-    // Landmark: Metro Parque Almagro
+    // Landmark: Metro Parque Almagro (Línea 3 - San Diego con Santa Isabel)
     const metroIcon = L.divIcon({
       className: 'custom-landmark-icon',
       html: `
@@ -365,7 +366,7 @@ export const MapView: React.FC<MapViewProps> = ({
       iconSize: [140, 22],
       iconAnchor: [70, 26],
     });
-    L.marker([-33.44975, -70.65150], { icon: metroIcon, interactive: false }).addTo(map);
+    L.marker([-33.45140, -70.65056], { icon: metroIcon, interactive: false }).addTo(map);
 
     // Layers
     const userLocationLayer = L.layerGroup().addTo(map);

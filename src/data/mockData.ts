@@ -1,10 +1,10 @@
 import { Activity, ForumPost, Neighbor, UserProfile } from '../types';
 
 // Real coordinates of Parque Almagro, Santiago Centro
-// Real OpenStreetMap boundaries: Bounded by Calle Santa Isabel (North), Mensía de los Nidos (South), San Diego (East) and Dieciocho / U. Central (West)
+// Real OpenStreetMap boundaries: Bounded by Calle Santa Isabel (North), Mensía de los Nidos (South), Basílica Sacramentinos / Arturo Prat (East) and Dieciocho / U. Central (West)
 export const PARQUE_ALMAGRO_BOUNDS_POLYGON: [number, number][] = [
-  [-33.45140, -70.65040], // North-East: Santa Isabel con San Diego / Plazoleta Sacramentinos
-  [-33.45145, -70.65150], // Santa Isabel / Acceso Metro Parque Almagro
+  [-33.45130, -70.64890], // North-East: Santa Isabel con Arturo Prat / Basílica Sacramentinos
+  [-33.45140, -70.65056], // Santa Isabel con San Diego / Acceso Metro Parque Almagro (Línea 3)
   [-33.45150, -70.65350], // Santa Isabel con Nataniel Cox
   [-33.45155, -70.65480], // Santa Isabel con Lord Cochrane
   [-33.45160, -70.65620], // Santa Isabel con San Ignacio
@@ -13,8 +13,8 @@ export const PARQUE_ALMAGRO_BOUNDS_POLYGON: [number, number][] = [
   [-33.45270, -70.65620], // Mensía de los Nidos con San Ignacio
   [-33.45265, -70.65480], // Mensía de los Nidos con Lord Cochrane
   [-33.45260, -70.65350], // Mensía de los Nidos con Nataniel Cox
-  [-33.45255, -70.65150], // Mensía de los Nidos cerca de San Diego
-  [-33.45250, -70.65040], // South-East: San Diego con Mensía de los Nidos
+  [-33.45250, -70.65056], // South: Mensía de los Nidos con San Diego
+  [-33.45240, -70.64890], // South-East: Arturo Prat frente a Plazoleta Sacramentinos
 ];
 
 // Helper point-in-polygon with slight tolerance buffer
@@ -106,9 +106,9 @@ export const INITIAL_ACTIVITIES: Activity[] = [
     id: 'act-almagro-4',
     title: 'Feria del Trueque y Libros Usados de Barrio',
     description: 'Intercambio de literatura, plantas, esquejes y juegos de mesa en buen estado. Fomentamos la economía circular, la cultura y la vida de plaza frente a la Basílica.',
-    locationName: 'Plazoleta Basílica Sacramentinos (San Diego esq. Santa Isabel)',
-    lat: -33.45200,
-    lng: -70.65080,
+    locationName: 'Plazoleta Basílica Sacramentinos (Santa Isabel esq. Arturo Prat)',
+    lat: -33.45132,
+    lng: -70.64905,
     date: 'Sábado, 11:00 hrs',
     rawDate: '2026-10-10T11:00',
     category: 'cultura',
@@ -160,9 +160,9 @@ export const INITIAL_ACTIVITIES: Activity[] = [
     id: 'act-almagro-7',
     title: 'Ronda Vecinal Iluminada de Regreso Seguro',
     description: 'Acompañamiento preventivo en grupo para estudiantes y trabajadores que regresan del metro Parque Almagro, recorriendo los senderos con chalecos reflectantes y silbatos.',
-    locationName: 'Acceso Metro Parque Almagro (Línea 3)',
-    lat: -33.45155,
-    lng: -70.65070,
+    locationName: 'Acceso Metro Parque Almagro (San Diego esq. Santa Isabel)',
+    lat: -33.45140,
+    lng: -70.65056,
     date: 'Jueves, 20:30 hrs',
     rawDate: '2026-10-08T20:30',
     category: 'seguridad',
@@ -450,7 +450,7 @@ export const PARQUE_ALMAGRO_ZONES = [
   { name: 'Zona Canil (Lord Cochrane a San Ignacio)', lat: -33.45220, lng: -70.65550 },
   { name: 'Pérgola y Juegos Infantiles Centrales', lat: -33.45205, lng: -70.65220 },
   { name: 'Sector Calistenia y Barras (Nataniel Cox)', lat: -33.45190, lng: -70.65420 },
-  { name: 'Acceso Metro Parque Almagro (L3)', lat: -33.45155, lng: -70.65070 },
-  { name: 'Plazoleta San Diego / Sacramentinos', lat: -33.45200, lng: -70.65080 },
+  { name: 'Acceso Metro Parque Almagro (L3)', lat: -33.45140, lng: -70.65056 },
+  { name: 'Plazoleta Basílica Sacramentinos', lat: -33.45132, lng: -70.64905 },
   { name: 'Pradera Poniente (Frente a U. Central)', lat: -33.45225, lng: -70.65660 }
 ];

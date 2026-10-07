@@ -470,7 +470,7 @@ export function subscribeToParkBoundaries(
 
           if (parsedCoords.length >= 3) {
             if (typeof localStorage !== 'undefined') {
-              localStorage.setItem('parques_vivos_custom_polygon_v3', JSON.stringify(parsedCoords));
+              localStorage.setItem('parques_vivos_custom_polygon_v4', JSON.stringify(parsedCoords));
             }
             onUpdate(parsedCoords);
           }
@@ -504,7 +504,7 @@ export async function saveRealtimeParkBoundaries(
   });
 
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('parques_vivos_custom_polygon_v3', JSON.stringify(coords));
+    localStorage.setItem('parques_vivos_custom_polygon_v4', JSON.stringify(coords));
   }
 }
 
@@ -526,6 +526,6 @@ export async function resetRealtimeParkBoundaries(): Promise<void> {
   });
 
   if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('parques_vivos_custom_polygon_v3');
+    localStorage.removeItem('parques_vivos_custom_polygon_v4');
   }
 }
