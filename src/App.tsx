@@ -3,670 +3,430 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { BottomNav, NavTab } from './components/BottomNav';
-import { MapView } from './components/MapView';
-import { ForumView } from './components/ForumView';
-import { CommunityView } from './components/CommunityView';
-import { CalendarView } from './components/CalendarView';
-import { ProfileView } from './components/ProfileView';
-import { ActivityDetailModal } from './components/ActivityDetailModal';
-import { CreateActivityModal } from './components/CreateActivityModal';
-import { OnboardingModal } from './components/OnboardingModal';
-import { Activity, ForumPost, UserProfile } from './types';
-import { 
-  INITIAL_ACTIVITIES, 
-  INITIAL_POSTS, 
-  INITIAL_USER 
-} from './data/mockData';
-import { 
-  initCalendarAuth, 
-  signInWithGoogleCalendar, 
-  logoutCalendar, 
-  createCalendarEvent, 
-  deleteCalendarEvent 
-} from './services/calendarService';
+import React, { useEffect, useState } from 'react';
+import { Activity, Attendee, SchematicZoneId, TimeFilter } from './types';
 import {
+  V2_INITIAL_ACTIVITIES,
+  endsBefore1930,
+  formatNeighborShortName,
+  normalizeActivityToV2,
+} from './data/mockData';
+import {
+  createRealtimeActivity,
+  getDeviceId,
+  getSavedNeighborName,
+  saveNeighborName,
   seedInitialDataIfEmpty,
   subscribeToActivities,
-  subscribeToForumPosts,
-  createRealtimeActivity,
   updateRealtimeAttendance,
-  createRealtimeForumPost,
-  deleteRealtimeForumPost,
-  toggleRealtimePostLike,
-  addRealtimeComment,
-  toggleRealtimeCommentLike,
-  getDeviceId,
 } from './services/realtimeService';
-import { CheckCircle2 } from 'lucide-react';
+import { ParqueAlmagroMap } from './components/ParqueAlmagroMap';
+import { ActivityDetailView } from './components/ActivityDetailView';
+import { PublishActivityView } from './components/PublishActivityView';
+import { BottomNav, MainTab } from './components/BottomNav';
+
+const STORAGE_KEY_V2 = 'parques_vivos_almagro_v2_activities';
+
+const FILTER_OPTIONS: Array<{ id: TimeFilter; label: string }> = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: 'manana', label: 'Mañana' },
+  { id: 'semana', label: 'Toda la semana' },
+  { id: 'antes-1930', label: 'Termina antes de las 19:30' },
+];
 
 export default function App() {
-  // Navigation State
-  const [currentTab, setCurrentTab] = useState<NavTab>('mapa');
+  const [currentTab, setCurrentTab] = useState<MainTab>('mapa');
+  const [activeFilter, setActiveFilter] = useState<TimeFilter>('hoy');
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [preselectedZoneId, setPreselectedZoneId] = useState<SchematicZoneId | undefined>(undefined);
 
-  // Accessibility State (Large font mode for elderly neighbors)
+  // Accessibility toggle for older neighbors (60+)
   const [isLargeFont, setIsLargeFont] = useState<boolean>(() => {
     return localStorage.getItem('parques_vivos_large_font') === 'true';
   });
 
-  // Onboarding Tutorial State (Shows on first visit)
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
-    return localStorage.getItem('parques_vivos_tutorial_seen') !== 'true';
+  // Neighbor short display name ("Nombre A.")
+  const [neighborName, setNeighborName] = useState<string>(() => {
+    return getSavedNeighborName();
   });
 
-  // Data State: Verified real OpenStreetMap coordinates for Parque Almagro
+  // Activities state (localStorage fast initial load + Firestore live sync)
   const [activities, setActivities] = useState<Activity[]>(() => {
-    const saved = localStorage.getItem('parques_vivos_activities_v5');
+    const saved = localStorage.getItem(STORAGE_KEY_V2);
     if (saved) {
       try {
-        const parsed: Activity[] = JSON.parse(saved);
-        // Strictly verify that coordinates are inside the actual Parque Almagro green area (-33.4510 to -33.4532)
-        const isAccurate = parsed.every((a) => a.lat <= -33.4510 && a.lat >= -33.4532);
-        if (isAccurate && Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const deviceId = getDeviceId();
+          return parsed.map((item) => normalizeActivityToV2(item, deviceId));
         }
       } catch {}
     }
-    // Purge outdated cached versions
-    localStorage.removeItem('parques_vivos_activities');
-    localStorage.removeItem('parques_vivos_activities_v2');
-    localStorage.removeItem('parques_vivos_activities_v3');
-    localStorage.removeItem('parques_vivos_activities_v4');
-    localStorage.setItem('parques_vivos_activities_v5', JSON.stringify(INITIAL_ACTIVITIES));
-    return INITIAL_ACTIVITIES;
+    return V2_INITIAL_ACTIVITIES;
   });
 
-  const [posts, setPosts] = useState<ForumPost[]>(() => {
-    const saved = localStorage.getItem('parques_vivos_posts');
-    if (saved) {
-      try {
-        const parsed: ForumPost[] = JSON.parse(saved);
-        return parsed.map((p) => {
-          if (!p.comments || p.comments.length === 0) {
-            const initial = INITIAL_POSTS.find((ip) => ip.id === p.id);
-            return {
-              ...p,
-              comments: initial?.comments || p.comments || [],
-              commentsCount: (initial?.comments || p.comments || []).length,
-            };
-          }
-          return p;
-        });
-      } catch {
-        return INITIAL_POSTS;
-      }
-    }
-    return INITIAL_POSTS;
-  });
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('parques_vivos_user');
-    return saved ? JSON.parse(saved) : INITIAL_USER;
-  });
-
-  // Modal States
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [createModalInitialLocation, setCreateModalInitialLocation] = useState<{
-    lat: number;
-    lng: number;
-    locationName: string;
-  } | null>(null);
-
-  const handleOpenCreateModal = (
-    initialCoords?: { lat: number; lng: number; locationName: string } | null
-  ) => {
-    setCreateModalInitialLocation(initialCoords || null);
-    setIsCreateModalOpen(true);
-  };
-
-  // Toast Notification state
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3500);
-  };
-
-  // Google Calendar Integration State
-  const [calendarUser, setCalendarUser] = useState<any>(null);
-  const [isCalendarConnected, setIsCalendarConnected] = useState<boolean>(false);
-  const [calendarToken, setCalendarToken] = useState<string | null>(null);
-  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
-  const [syncedCalendarEvents, setSyncedCalendarEvents] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('parques_vivos_calendar_synced');
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  // Real-Time Online Multi-Device Firestore Synchronization
   useEffect(() => {
-    // 1. Seed initial verified activities and forum threads if database is fresh
-    seedInitialDataIfEmpty().catch((err) => console.error('Seed error:', err));
-
-    // 2. Real-time listener for activities across all devices
-    const unsubscribeActivities = subscribeToActivities(
-      (liveActivities) => {
-        setIsRealtimeConnected(true);
-        setActivities((prev) => {
-          // Merge local attendance status with live attendee counts
-          const deviceId = getDeviceId();
-          return liveActivities.map((liveAct) => {
-            const localMatch = prev.find((p) => p.id === liveAct.id);
-            return {
-              ...liveAct,
-              isAttending: localMatch ? localMatch.isAttending : liveAct.isAttending,
-            };
-          });
-        });
-      },
-      () => setIsRealtimeConnected(false)
-    );
-
-    // 3. Real-time listener for forum posts and threads across all devices
-    const unsubscribePosts = subscribeToForumPosts(
-      (livePosts) => {
-        setIsRealtimeConnected(true);
-        if (livePosts.length > 0) {
-          setPosts(livePosts);
-        }
-      },
-      (err) => {
-        console.error('Forum subscription error:', err);
-        setIsRealtimeConnected(false);
-      }
-    );
-
-    return () => {
-      unsubscribeActivities();
-      unsubscribePosts();
-    };
-  }, []);
-
-  // Persist synced calendar event mapping
-  useEffect(() => {
-    localStorage.setItem('parques_vivos_calendar_synced', JSON.stringify(syncedCalendarEvents));
-  }, [syncedCalendarEvents]);
-
-  // Initialize Firebase Auth listener for Google Calendar
-  useEffect(() => {
-    const unsubscribe = initCalendarAuth(
-      (authUser, token) => {
-        setCalendarUser(authUser);
-        setCalendarToken(token);
-        setIsCalendarConnected(true);
-      },
-      () => {
-        setCalendarUser(null);
-        setCalendarToken(null);
-        setIsCalendarConnected(false);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
-
-  // Connect to Google Calendar via OAuth popup
-  const handleConnectCalendar = async () => {
-    try {
-      showToast('Conectando con Google Calendar...');
-      const res = await signInWithGoogleCalendar();
-      if (res) {
-        setCalendarUser(res.user);
-        setCalendarToken(res.accessToken);
-        setIsCalendarConnected(true);
-        showToast(`¡Google Calendar vinculado! (${res.user.email || 'tu cuenta'})`);
-      }
-    } catch (err: any) {
-      console.error('Error al conectar Google Calendar:', err);
-      showToast('No se pudo completar la vinculación con Google Calendar.');
-    }
-  };
-
-  // Disconnect Google Calendar
-  const handleDisconnectCalendar = async () => {
-    const confirmed = window.confirm('¿Deseas desvincular tu cuenta de Google Calendar de Parques Vivos?');
-    if (!confirmed) return;
-    await logoutCalendar();
-    setCalendarUser(null);
-    setCalendarToken(null);
-    setIsCalendarConnected(false);
-    showToast('Cuenta de Google Calendar desvinculada.');
-  };
-
-  // Manual sync for a specific activity
-  const handleManualSyncCalendar = async (activity: Activity) => {
-    if (!isCalendarConnected) {
-      handleConnectCalendar();
-      return;
-    }
-    showToast('Agendando actividad en Google Calendar...');
-    const syncRes = await createCalendarEvent(activity, calendarToken || undefined);
-    if (syncRes.success && syncRes.eventId) {
-      setSyncedCalendarEvents((prev) => ({
-        ...prev,
-        [activity.id]: syncRes.eventId!,
-      }));
-      showToast('📅 ¡Agregado a tu Google Calendar con éxito!');
-    } else {
-      showToast(syncRes.error || 'No se pudo agendar en Google Calendar.');
-    }
-  };
-
-  // Sync font size class to document root
-  useEffect(() => {
-    if (isLargeFont) {
-      document.documentElement.classList.add('large-font');
-    } else {
-      document.documentElement.classList.remove('large-font');
-    }
     localStorage.setItem('parques_vivos_large_font', String(isLargeFont));
   }, [isLargeFont]);
 
-  // Persist activities
   useEffect(() => {
-    localStorage.setItem('parques_vivos_activities_v5', JSON.stringify(activities));
+    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(activities));
   }, [activities]);
 
-  // Persist posts
+  // Seed & subscribe to Firestore real-time updates
   useEffect(() => {
-    localStorage.setItem('parques_vivos_posts', JSON.stringify(posts));
-  }, [posts]);
+    seedInitialDataIfEmpty();
+    const unsubscribe = subscribeToActivities((liveActivities) => {
+      setActivities(liveActivities);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  // Persist user
+  // Derive filtered activities during render (no redundant effect)
+  const filteredActivities = activities.filter((act) => {
+    if (activeFilter === 'hoy') return (act.dayLabel || 'Hoy') === 'Hoy';
+    if (activeFilter === 'manana') return act.dayLabel === 'Mañana';
+    if (activeFilter === 'antes-1930') return endsBefore1930(act.endTime, act.startTime);
+    return true; // 'semana'
+  });
+
+  const selectedActivity = selectedActivityId
+    ? activities.find((a) => a.id === selectedActivityId) || null
+    : null;
+
+  const effectiveHighlightedActivity =
+    filteredActivities.find((a) => a.id === highlightedId) ||
+    filteredActivities[0] ||
+    null;
+
+  // Keep document title synchronized with current SPA view
   useEffect(() => {
-    localStorage.setItem('parques_vivos_user', JSON.stringify(user));
-  }, [user]);
-
-  const handleCloseTutorial = () => {
-    setIsOnboardingOpen(false);
-    localStorage.setItem('parques_vivos_tutorial_seen', 'true');
-  };
-
-  // Toggle Attendance with Automatic Google Calendar Sync!
-  const handleToggleAttendance = async (activityId: string) => {
-    const act = activities.find((a) => a.id === activityId);
-    if (!act) return;
-
-    const newAttending = !act.isAttending;
-    const newCount = newAttending ? act.attendeesCount + 1 : Math.max(1, act.attendeesCount - 1);
-
-    // Update user attended stat
-    setUser((u) => ({
-      ...u,
-      activitiesAttended: newAttending
-        ? u.activitiesAttended + 1
-        : Math.max(0, u.activitiesAttended - 1),
-    }));
-
-    const updated = {
-      ...act,
-      isAttending: newAttending,
-      attendeesCount: newCount,
-    };
-
-    setActivities((prev) =>
-      prev.map((a) => (a.id === activityId ? updated : a))
-    );
-
-    // Sync attendance in real-time across devices
-    updateRealtimeAttendance(activityId, newAttending).catch((err) =>
-      console.error('Realtime attendance error:', err)
-    );
-
-    if (selectedActivity?.id === activityId) {
-      setSelectedActivity(updated);
-    }
-
-    if (newAttending) {
-      // Automatic Google Calendar Sync on Attendance Confirmation
-      if (isCalendarConnected) {
-        showToast('¡Asistencia confirmada! Agendando en tu Google Calendar...');
-        const syncRes = await createCalendarEvent(updated, calendarToken || undefined);
-        if (syncRes.success && syncRes.eventId) {
-          setSyncedCalendarEvents((prev) => ({
-            ...prev,
-            [activityId]: syncRes.eventId!,
-          }));
-          showToast('📅 ¡Asistencia confirmada y agregada automáticamente a tu Google Calendar!');
-        } else {
-          showToast('¡Asistencia confirmada! Tu presencia cuida el parque.');
-        }
-      } else {
-        showToast('¡Asistencia confirmada! Puedes vincular Google Calendar arriba para agendarla.');
-      }
+    if (selectedActivity) {
+      document.title = `${selectedActivity.title} | Parque Almagro`;
+    } else if (currentTab === 'publicar') {
+      document.title = 'Publicar actividad | Parque Almagro';
     } else {
-      // Cancelled attendance - remove from calendar if synced
-      const existingEventId = syncedCalendarEvents[activityId];
-      if (existingEventId && isCalendarConnected) {
-        await deleteCalendarEvent(existingEventId, act.title, calendarToken || undefined);
-        setSyncedCalendarEvents((prev) => {
-          const next = { ...prev };
-          delete next[activityId];
-          return next;
-        });
-      }
-      showToast('Has cancelado tu asistencia a esta actividad.');
+      document.title = 'Parque Almagro | Actividades de los vecinos';
+    }
+  }, [currentTab, selectedActivity]);
+
+  const showToast = (msg: string) => {
+    setStatusMessage(msg);
+    window.setTimeout(() => {
+      setStatusMessage((prev) => (prev === msg ? null : prev));
+    }, 3800);
+  };
+
+  const handleSaveNeighborName = (rawName: string) => {
+    const clean = saveNeighborName(rawName);
+    setNeighborName(clean);
+  };
+
+  const handleSelectTab = (tab: MainTab) => {
+    setSelectedActivityId(null);
+    setCurrentTab(tab);
+  };
+
+  const handleOpenActivityDetail = (activity: Activity) => {
+    setHighlightedId(activity.id);
+    setSelectedActivityId(activity.id);
+    setCurrentTab('mapa');
+  };
+
+  const handleToggleAttendance = async (activityId: string, chosenName: string) => {
+    const target = activities.find((a) => a.id === activityId);
+    if (!target) return;
+
+    const deviceId = getDeviceId();
+    const nextAttending = !target.isAttending;
+    const shortName = formatNeighborShortName(chosenName || neighborName || 'Vecino A.');
+
+    // Optimistic UI update
+    setActivities((prev) =>
+      prev.map((act) => {
+        if (act.id !== activityId) return act;
+        const currentList: Attendee[] = act.attendees ? [...act.attendees] : [];
+        let nextList: Attendee[];
+        if (nextAttending) {
+          nextList = [
+            ...currentList.filter((p) => p.uid !== deviceId),
+            { uid: deviceId, name: shortName, role: 'Vecino', verified: true },
+          ];
+        } else {
+          nextList = currentList.filter((p) => p.uid !== deviceId);
+        }
+        return {
+          ...act,
+          isAttending: nextAttending,
+          attendees: nextList,
+          attendeesCount: nextList.length,
+        };
+      })
+    );
+
+    showToast(
+      nextAttending
+        ? 'Listo, quedaste inscrito en la actividad.'
+        : 'Inscripción cancelada.'
+    );
+
+    try {
+      await updateRealtimeAttendance(activityId, nextAttending, shortName);
+    } catch (err) {
+      console.error('Error syncing attendance:', err);
     }
   };
 
-  // Create New Activity with Automatic Google Calendar Sync & Real-time Broadcast!
-  const handleCreateActivity = async (
-    newActData: Omit<Activity, 'id' | 'attendeesCount' | 'isAttending' | 'status'>
-  ) => {
+  const handlePublishActivity = async (newActData: Omit<Activity, 'id'>) => {
+    const deviceId = getDeviceId();
+    const newId = `act-${Date.now()}`;
+    const creatorShort = formatNeighborShortName(newActData.creatorName);
+
     const newActivity: Activity = {
       ...newActData,
-      id: `act-${Date.now()}`,
-      attendeesCount: 1, // The creator is the first attendee
+      id: newId,
+      creatorName: creatorShort,
+      attendees: [
+        {
+          uid: deviceId,
+          name: creatorShort,
+          role: 'Organizador',
+          verified: true,
+        },
+      ],
+      attendeesCount: 1,
       isAttending: true,
-      status: 'activa',
     };
 
-    setActivities((prev) => [newActivity, ...prev]);
-    setUser((u) => ({
-      ...u,
-      activitiesCreated: u.activitiesCreated + 1,
-      activitiesAttended: u.activitiesAttended + 1,
-    }));
+    setActivities((prev) => [...prev, newActivity]);
+    setHighlightedId(newId);
+    setSelectedActivityId(null);
 
-    setSelectedActivity(newActivity);
-
-    // Broadcast to Firestore for all connected devices
-    createRealtimeActivity(newActivity).catch((err) =>
-      console.error('Realtime activity creation error:', err)
-    );
-
-    // If Google Calendar is linked, automatically add the created event to the user's calendar!
-    if (isCalendarConnected) {
-      showToast('Publicando y sincronizando con Google Calendar...');
-      const syncRes = await createCalendarEvent(newActivity, calendarToken || undefined);
-      if (syncRes.success && syncRes.eventId) {
-        setSyncedCalendarEvents((prev) => ({
-          ...prev,
-          [newActivity.id]: syncRes.eventId!,
-        }));
-        showToast('🎉 ¡Actividad publicada y agregada automáticamente a tu Google Calendar!');
-      } else {
-        showToast('¡Actividad publicada con éxito en Parque Almagro!');
-      }
+    // Switch filter so user immediately sees their published activity on the map
+    if (newActivity.dayLabel === 'Hoy') {
+      setActiveFilter('hoy');
+    } else if (newActivity.dayLabel === 'Mañana') {
+      setActiveFilter('manana');
     } else {
-      showToast('¡Actividad publicada con éxito en Parque Almagro!');
+      setActiveFilter('semana');
+    }
+
+    setCurrentTab('mapa');
+    showToast('Actividad publicada. Ya aparece en el mapa.');
+
+    try {
+      await createRealtimeActivity(newActivity);
+    } catch (err) {
+      console.error('Error saving activity to Firestore:', err);
     }
   };
 
-  // Toggle Like on Forum Post with Real-Time sync
-  const handleToggleLike = (postId: string) => {
-    const targetPost = posts.find((p) => p.id === postId);
-    const currentlyLiked = targetPost ? Boolean(targetPost.isLiked) : false;
-
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          const isLiked = !post.isLiked;
-          return {
-            ...post,
-            isLiked,
-            likes: isLiked ? post.likes + 1 : Math.max(0, post.likes - 1),
-          };
-        }
-        return post;
-      })
-    );
-
-    // Sync to Firestore in real-time
-    toggleRealtimePostLike(postId, currentlyLiked).catch((err) =>
-      console.error('Realtime like error:', err)
-    );
-  };
-
-  // Add Forum Post with optional image & Real-Time broadcast
-  const handleAddPost = (
-    category: 'Ideas' | 'Reseñas' | 'Panorama',
-    content: string,
-    imageUrl?: string
-  ) => {
-    const newPost: ForumPost = {
-      id: `post-${Date.now()}`,
-      authorName: user.name,
-      authorAvatar: user.avatar,
-      authorBadge: 'Tú • Vecino Verificado',
-      timeAgo: 'Recién',
-      category,
-      content,
-      imageUrl,
-      isOwner: true,
-      likes: 1,
-      isLiked: true,
-      commentsCount: 0,
-      comments: [],
-      tag: '#AlmagroVivo',
-    };
-
-    setPosts((prev) => [newPost, ...prev]);
-
-    // Broadcast new thread to all devices via Firestore
-    createRealtimeForumPost(newPost).catch((err) =>
-      console.error('Realtime post creation error:', err)
-    );
-
-    showToast('🎉 ¡Hilo publicado con éxito en el foro vecinal!');
-  };
-
-  // Delete Forum Post (author only) with Real-Time sync
-  const handleDeletePost = (postId: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
-
-    // Delete from Firestore so it disappears for all devices
-    deleteRealtimeForumPost(postId).catch((err) =>
-      console.error('Realtime delete error:', err)
-    );
-
-    showToast('🗑️ Tu hilo ha sido eliminado correctamente.');
-  };
-
-  // Add Comment / Thread Reply to a Post with Real-Time sync
-  const handleAddComment = (
-    postId: string,
-    content: string,
-    replyToAuthor?: string
-  ) => {
-    const newComment = {
-      id: `c-${Date.now()}`,
-      postId,
-      authorName: user.name,
-      authorAvatar: user.avatar,
-      authorBadge: 'Vecino Verificado',
-      timeAgo: 'Recién',
-      content,
-      likes: 0,
-      isLiked: false,
-      replyToAuthor,
-    };
-
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          const currentComments = post.comments || [];
-          return {
-            ...post,
-            comments: [...currentComments, newComment],
-            commentsCount: currentComments.length + 1,
-          };
-        }
-        return post;
-      })
-    );
-
-    // Sync new comment to Firestore
-    addRealtimeComment(postId, newComment).catch((err) =>
-      console.error('Realtime comment error:', err)
-    );
-
-    showToast('¡Tu respuesta se publicó en el hilo!');
-  };
-
-  // Toggle Like on a Comment with Real-Time sync
-  const handleToggleCommentLike = (postId: string, commentId: string) => {
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId && post.comments) {
-          return {
-            ...post,
-            comments: post.comments.map((c) => {
-              if (c.id === commentId) {
-                const isLiked = !c.isLiked;
-                return {
-                  ...c,
-                  isLiked,
-                  likes: isLiked ? c.likes + 1 : Math.max(0, c.likes - 1),
-                };
-              }
-              return c;
-            }),
-          };
-        }
-        return post;
-      })
-    );
-
-    // Sync comment like to Firestore
-    toggleRealtimeCommentLike(postId, commentId).catch((err) =>
-      console.error('Realtime comment like error:', err)
-    );
-  };
-
-  // Update User Profile
-  const handleUpdateUser = (updated: Partial<UserProfile>) => {
-    setUser((prev) => ({ ...prev, ...updated }));
-    showToast('Perfil actualizado correctamente.');
-  };
-
-  const attendingActivities = activities.filter((act) => act.isAttending);
-
   return (
-    <div className={`min-h-screen bg-stone-100 flex flex-col font-sans transition-all duration-150 ${isLargeFont ? 'large-font' : ''}`}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-stone-900 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 border border-emerald-500/50 animate-in fade-in slide-in-from-top-4 duration-200 max-w-[90%] text-xs sm:text-sm font-bold">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className={`min-h-dvh bg-[#eef1ec] flex justify-center ${isLargeFont ? 'large-font' : ''}`}>
+      <a
+        href="#main-content"
+        className="visually-hidden focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-[#1f6a42] focus:text-white focus:px-4 focus:py-2 focus:rounded-xl focus:font-bold"
+      >
+        Saltar al contenido principal
+      </a>
 
-      {/* Global Header with Accessibility Toggle & Google Calendar Link */}
-      <Header
-        isLargeFont={isLargeFont}
-        onToggleLargeFont={() => setIsLargeFont((prev) => !prev)}
-        onOpenTutorial={() => setIsOnboardingOpen(true)}
-        activeCount={activities.filter((a) => a.status === 'activa').length}
-        isCalendarConnected={isCalendarConnected}
-        calendarUserEmail={calendarUser?.email}
-        onConnectCalendar={handleConnectCalendar}
-        onDisconnectCalendar={handleDisconnectCalendar}
-        isRealtimeConnected={isRealtimeConnected}
-        showCalendarButton={currentTab === 'calendario'}
-      />
+      <div className="w-full max-w-[460px] bg-[#fafcfa] min-h-dvh sm:my-4 sm:min-h-[calc(100dvh-2rem)] sm:rounded-[28px] sm:shadow-lg sm:border sm:border-[#d6e0d3] flex flex-col overflow-hidden">
+        {/* Clean Parque Almagro Header */}
+        <header className="px-4 pt-4 pb-3 bg-[#fafcfa] flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-extrabold text-[#16241b] tracking-tight leading-tight">
+              Parque Almagro
+            </h1>
+            <p className="text-xs font-medium text-[#596c5f] mt-0.5">
+              Actividades de los vecinos
+            </p>
+          </div>
 
-      {/* Main Content View Container - Mobile First Centered Layout */}
-      <main className="flex-1 w-full max-w-lg mx-auto relative flex flex-col">
-        {currentTab === 'mapa' && (
-          <MapView
-            activities={activities}
-            onSelectActivity={(act) => setSelectedActivity(act)}
-            onOpenCreateModal={handleOpenCreateModal}
-            selectedActivityId={selectedActivity?.id}
-          />
-        )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsLargeFont((v) => !v)}
+              aria-pressed={isLargeFont}
+              aria-label="Aumentar tamaño de letra"
+              className={`min-h-[32px] px-2.5 py-1 rounded-full text-xs font-extrabold border transition-colors cursor-pointer ${
+                isLargeFont
+                  ? 'bg-[#1f6a42] text-white border-[#1f6a42]'
+                  : 'bg-white text-[#2b3f31] border-[#d3ddd1] hover:bg-[#eef4ef]'
+              }`}
+            >
+              A+
+            </button>
 
-        {currentTab === 'calendario' && (
-          <CalendarView
-            activities={activities}
-            onToggleAttendance={handleToggleAttendance}
-            onSelectActivity={(act) => setSelectedActivity(act)}
-            onGoToMap={() => setCurrentTab('mapa')}
-            isCalendarConnected={isCalendarConnected}
-            calendarUserEmail={calendarUser?.email}
-            onConnectCalendar={handleConnectCalendar}
-            syncedCalendarEvents={syncedCalendarEvents}
-            onManualSyncCalendar={handleManualSyncCalendar}
-          />
-        )}
+            <span className="px-2.5 py-1 rounded-full bg-[#e4f2e8] text-[#1f6a42] text-[11px] font-extrabold tracking-wide uppercase">
+              En vivo
+            </span>
+          </div>
+        </header>
 
-        {currentTab === 'foro' && (
-          <ForumView
-            posts={posts}
-            currentUser={user}
-            onToggleLike={handleToggleLike}
-            onAddPost={handleAddPost}
-            onDeletePost={handleDeletePost}
-            onAddComment={handleAddComment}
-            onToggleCommentLike={handleToggleCommentLike}
-          />
-        )}
+        {/* Main Content */}
+        <main id="main-content" tabIndex={-1} className="flex-1 px-4 pb-5 overflow-y-auto">
+          {selectedActivity && currentTab === 'mapa' ? (
+            <ActivityDetailView
+              activity={selectedActivity}
+              currentNeighborName={neighborName}
+              onSaveNeighborName={handleSaveNeighborName}
+              onBack={() => setSelectedActivityId(null)}
+              onToggleAttendance={handleToggleAttendance}
+            />
+          ) : currentTab === 'publicar' ? (
+            <PublishActivityView
+              defaultOrganizerName={neighborName}
+              initialZoneId={preselectedZoneId}
+              onSaveOrganizerName={handleSaveNeighborName}
+              onPublishActivity={handlePublishActivity}
+            />
+          ) : (
+            <div className="space-y-3.5">
+              {/* Time & twilight filter pills */}
+              <search aria-label="Filtrar actividades del Parque Almagro">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 touch-pan-x">
+                  {FILTER_OPTIONS.map((opt) => {
+                    const isActive = activeFilter === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={() => setActiveFilter(opt.id)}
+                        className={`shrink-0 min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-[#1f6a42] text-white border-[#1f6a42]'
+                            : 'bg-white text-[#25372b] border-[#d7e0d5] hover:bg-[#f1f5f0]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </search>
 
-        {currentTab === 'comunidad' && (
-          <CommunityView onGoToForum={() => setCurrentTab('foro')} />
-        )}
+              {/* Local interactive map exclusively of Parque Almagro */}
+              <ParqueAlmagroMap
+                activities={filteredActivities}
+                highlightedId={effectiveHighlightedActivity?.id || null}
+                onHighlight={setHighlightedId}
+                onSelectActivity={handleOpenActivityDetail}
+                onQuickPublishAtZone={(zoneId) => {
+                  setPreselectedZoneId(zoneId);
+                  setSelectedActivityId(null);
+                  setCurrentTab('publicar');
+                }}
+              />
 
-        {currentTab === 'perfil' && (
-          <ProfileView
-            user={user}
-            onUpdateUser={handleUpdateUser}
-            attendingActivities={attendingActivities}
-            onSelectActivity={(act) => {
-              setSelectedActivity(act);
-              setCurrentTab('mapa');
-            }}
-            onOpenTutorial={() => setIsOnboardingOpen(true)}
-            onGoToCalendar={() => setCurrentTab('calendario')}
-          />
-        )}
-      </main>
+              {/* Highlighted preview card right below the schematic map (1-tap open) */}
+              {effectiveHighlightedActivity ? (
+                <button
+                  type="button"
+                  onClick={() => handleOpenActivityDetail(effectiveHighlightedActivity)}
+                  className="w-full text-left bg-white hover:bg-[#f5f8f4] p-3.5 rounded-2xl border border-[#dfe6dd] flex items-center justify-between gap-3 transition-colors cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold text-[#16241b] truncate">
+                      {effectiveHighlightedActivity.title}
+                    </p>
+                    <p className="text-xs text-[#596c5f] mt-0.5 truncate">
+                      {effectiveHighlightedActivity.locationName} ·{' '}
+                      {effectiveHighlightedActivity.attendeesCount} de{' '}
+                      {effectiveHighlightedActivity.suggestedCapacity || 12} cupos sugeridos
+                    </p>
+                  </div>
 
-      {/* Fixed Bottom Navigation (5 tabs: Mapa, Calendario, Foro, Comunidad, Perfil) */}
-      <BottomNav
-        currentTab={currentTab}
-        onSelectTab={(tab) => setCurrentTab(tab)}
-        activitiesCount={activities.length}
-        attendingCount={attendingActivities.length}
-      />
+                  <div className="text-right shrink-0">
+                    <p className="schedule-time text-sm font-bold text-[#334739]">
+                      {effectiveHighlightedActivity.startTime}–{effectiveHighlightedActivity.endTime}
+                    </p>
+                    <span className="inline-block text-xs font-extrabold text-[#1f6a42] mt-0.5">
+                      Ver detalle
+                    </span>
+                  </div>
+                </button>
+              ) : null}
 
-      {/* Activity Detail Modal */}
-      <ActivityDetailModal
-        activity={selectedActivity}
-        onClose={() => setSelectedActivity(null)}
-        onToggleAttendance={handleToggleAttendance}
-        isCalendarConnected={isCalendarConnected}
-        calendarUserEmail={calendarUser?.email}
-        isSyncedToCalendar={Boolean(selectedActivity && syncedCalendarEvents[selectedActivity.id])}
-        onConnectCalendar={handleConnectCalendar}
-        onManualSyncCalendar={handleManualSyncCalendar}
-      />
+              {/* Activities list (1 single tap opens detail directly) */}
+              <section className="space-y-2 pt-0.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[11px] font-extrabold uppercase tracking-wider text-[#596c5f]">
+                    {filteredActivities.length}{' '}
+                    {filteredActivities.length === 1 ? 'actividad' : 'actividades'}
+                  </h2>
+                </div>
 
-      {/* Create Activity Modal */}
-      <CreateActivityModal
-        isOpen={isCreateModalOpen}
-        onClose={() => {
-          setIsCreateModalOpen(false);
-          setCreateModalInitialLocation(null);
-        }}
-        onCreateActivity={handleCreateActivity}
-        initialLocation={createModalInitialLocation}
-        isCalendarConnected={isCalendarConnected}
-        onConnectCalendar={handleConnectCalendar}
-        onSelectOnMapMode={() => {
-          setIsCreateModalOpen(false);
-          showToast('📍 Toca cualquier punto dentro del área verde del parque.');
-        }}
-      />
+                {filteredActivities.length > 0 ? (
+                  <ul role="list" className="space-y-2 list-none p-0 m-0">
+                    {filteredActivities.map((act) => {
+                      const isHighlighted = effectiveHighlightedActivity?.id === act.id;
+                      return (
+                        <li key={act.id}>
+                          <button
+                            type="button"
+                            onMouseEnter={() => setHighlightedId(act.id)}
+                            onClick={() => handleOpenActivityDetail(act)}
+                            className={`w-full text-left p-3.5 rounded-2xl border transition-colors cursor-pointer flex items-center justify-between gap-3 ${
+                              isHighlighted
+                                ? 'bg-white border-[#8d5c38] ring-1 ring-[#8d5c38]/20'
+                                : 'bg-white border-[#dfe6dd] hover:border-[#b7c8b4]'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-extrabold text-[#16241b] truncate">
+                                {act.title}
+                              </p>
+                              <p className="schedule-time text-xs font-medium text-[#526558] mt-0.5 truncate">
+                                {act.dayLabel || 'Hoy'} · {act.startTime}–{act.endTime} ·{' '}
+                                {act.locationName}
+                              </p>
+                            </div>
 
-      {/* 4-Step Onboarding Tutorial Modal */}
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={handleCloseTutorial}
-      />
+                            {act.isAttending ? (
+                              <span className="px-2.5 py-1 rounded-full bg-[#e4f2e8] text-[#1f6a42] text-[11px] font-extrabold shrink-0">
+                                ✓ Inscrito
+                              </span>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="bg-white p-4 rounded-2xl border border-[#dfe6dd] text-center space-y-2">
+                    <p className="text-sm text-[#495c4f]">
+                      Aún no hay actividades convocadas para este filtro.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab('publicar')}
+                      className="text-sm font-extrabold text-[#1f6a42] underline cursor-pointer py-1 px-2"
+                    >
+                      Publicar la primera actividad
+                    </button>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {/* Polite toast banner inside main frame (matches Screen 6 of prototype) */}
+          <div role="status" aria-live="polite" className="mt-3">
+            {statusMessage ? (
+              <div className="px-4 py-3 rounded-xl bg-[#193826] text-white text-xs font-bold shadow-md">
+                {statusMessage}
+              </div>
+            ) : null}
+          </div>
+        </main>
+
+        {/* Minimalist 2-tab Bottom Navigation: Mapa | Publicar */}
+        <BottomNav currentTab={currentTab} onSelectTab={handleSelectTab} />
+      </div>
     </div>
   );
 }

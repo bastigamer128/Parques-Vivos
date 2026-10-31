@@ -1,28 +1,32 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
+import {
   initializeFirestore,
-  collection, 
-  doc, 
-  setDoc, 
+  collection,
+  doc,
+  setDoc,
   getDoc,
-  deleteDoc, 
-  getDocs, 
-  onSnapshot, 
-  updateDoc, 
-  arrayUnion, 
-  arrayRemove, 
+  deleteDoc,
+  getDocs,
+  onSnapshot,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
   increment,
-  writeBatch
+  writeBatch,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Activity, ForumPost, ForumComment, UserProfile } from '../types';
-import { INITIAL_ACTIVITIES, INITIAL_POSTS, PARQUE_ALMAGRO_BOUNDS_POLYGON } from '../data/mockData';
+import { Activity, Attendee, ForumComment, ForumPost } from '../types';
+import {
+  V2_INITIAL_ACTIVITIES,
+  PARQUE_ALMAGRO_BOUNDS_POLYGON,
+  formatNeighborShortName,
+  normalizeActivityToV2,
+} from '../data/mockData';
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with specific database ID and robust HTTP Long-Polling
-// (Prevents WebSockets drops and "Could not reach Cloud Firestore backend [code=unavailable]" inside iFrames and mobile browsers)
+// Initialize Firestore with HTTP Long-Polling for mobile & iFrame reliability
 export const db = initializeFirestore(
   app,
   {
@@ -44,46 +48,22 @@ export function getDeviceId(): string {
   return id;
 }
 
-// Track posts created by this device so the author can always delete them
-export function trackCreatedPost(postId: string): void {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-  try {
-    const saved = localStorage.getItem('parques_vivos_my_posts');
-    const list: string[] = saved ? JSON.parse(saved) : [];
-    if (!list.includes(postId)) {
-      list.push(postId);
-      localStorage.setItem('parques_vivos_my_posts', JSON.stringify(list));
-    }
-  } catch {}
+export function getSavedNeighborName(): string {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return 'Vecino A.';
+  }
+  return localStorage.getItem('parques_vivos_neighbor_name_v2') || '';
 }
 
-export function untrackCreatedPost(postId: string): void {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-  try {
-    const saved = localStorage.getItem('parques_vivos_my_posts');
-    if (saved) {
-      const list: string[] = JSON.parse(saved);
-      const filtered = list.filter((id) => id !== postId);
-      localStorage.setItem('parques_vivos_my_posts', JSON.stringify(filtered));
-    }
-  } catch {}
-}
-
-export function isPostOwnedByDevice(postId: string, creatorUid?: string): boolean {
-  if (creatorUid && creatorUid === getDeviceId()) return true;
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return false;
-  try {
-    const saved = localStorage.getItem('parques_vivos_my_posts');
-    if (saved) {
-      const list: string[] = JSON.parse(saved);
-      return list.includes(postId);
-    }
-  } catch {}
-  return false;
+export function saveNeighborName(name: string): string {
+  const formatted = formatNeighborShortName(name);
+  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+    localStorage.setItem('parques_vivos_neighbor_name_v2', formatted);
+  }
+  return formatted;
 }
 
 /**
- * Crucial Helper: Firestore throws errors if ANY object property has value `undefined`.
  * Recursively strips undefined keys from objects and arrays so Firestore writes never fail.
  */
 export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -104,90 +84,78 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Par
   return clean as Partial<T>;
 }
 
-/**
- * Helper to determine numerical timestamp from post ID or creation date for reliable sorting
- */
-function getTimestampForPost(data: Record<string, any>, docId: string): number {
-  if (typeof data.createdAt === 'number' && data.createdAt > 0) {
-    return data.createdAt;
-  }
-  if (docId.startsWith('post-')) {
-    const numericPart = Number(docId.replace('post-', ''));
-    if (!isNaN(numericPart) && numericPart > 1000000000000) {
-      return numericPart;
-    }
-    // Mock post IDs (post-0, post-1, post-2...) - higher index means older
-    if (!isNaN(numericPart)) {
-      return 1000000000000 - numericPart * 1000000;
-    }
-  }
-  return 0;
-}
+const LEGACY_V1_SEED_IDS = new Set([
+  'act-almagro-1',
+  'act-almagro-2',
+  'act-almagro-3',
+  'act-almagro-4',
+  'act-almagro-5',
+  'act-almagro-6',
+  'act-almagro-7',
+]);
 
 /**
- * Seed initial activities and forum posts to Firestore if collections are empty.
+ * Seeds the simplified Parque Almagro v2 activities once and cleans legacy v1 demo entries.
  */
 export async function seedInitialDataIfEmpty(): Promise<void> {
   try {
+    const v2SeedFlagRef = doc(db, 'park_settings', 'prototype_v2_seed');
+    const v2SeedSnap = await getDoc(v2SeedFlagRef);
     const activitiesRef = collection(db, 'activities');
     const actSnap = await getDocs(activitiesRef);
-    if (actSnap.empty) {
-      console.log('Seeding initial activities to Firestore...');
+
+    if (!v2SeedSnap.exists() || actSnap.empty) {
       const batch = writeBatch(db);
-      for (const act of INITIAL_ACTIVITIES) {
+
+      // Remove old verbose v1 seed items if present
+      actSnap.forEach((docItem) => {
+        if (LEGACY_V1_SEED_IDS.has(docItem.id)) {
+          batch.delete(docItem.ref);
+        }
+      });
+
+      for (const act of V2_INITIAL_ACTIVITIES) {
         const actDoc = doc(db, 'activities', act.id);
         const cleanAct = sanitizeForFirestore({
           ...act,
+          attendeeUids: (act.attendees || []).map((a) => a.uid),
           createdAt: Date.now(),
         });
         batch.set(actDoc, cleanAct);
       }
-      await batch.commit();
-      console.log('Initial activities seeded successfully');
-    }
 
-    const postsRef = collection(db, 'forum_posts');
-    const postSnap = await getDocs(postsRef);
-    if (postSnap.empty) {
-      console.log('Seeding initial forum posts to Firestore...');
-      const batch = writeBatch(db);
-      let offset = 0;
-      for (const post of INITIAL_POSTS) {
-        const postDoc = doc(db, 'forum_posts', post.id);
-        const cleanPost = sanitizeForFirestore({
-          ...post,
-          createdAt: Date.now() - offset * 60000,
-          likedBy: [],
-        });
-        batch.set(postDoc, cleanPost);
-        offset += 15;
-      }
-      await batch.commit();
-      console.log('Initial forum posts seeded successfully');
-    }
-
-    const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
-    const boundsSnap = await getDoc(boundariesDocRef);
-    if (!boundsSnap.exists()) {
-      console.log('Seeding initial park boundaries to Firestore...');
-      const serialized = PARQUE_ALMAGRO_BOUNDS_POLYGON.map(([lat, lng]) => ({
-        lat: Number(lat),
-        lng: Number(lng),
-      }));
-      await setDoc(boundariesDocRef, {
-        polygonCoords: serialized,
-        updatedAt: Date.now(),
-        updatedBy: 'system-seed',
+      batch.set(v2SeedFlagRef, {
+        seededAt: Date.now(),
+        version: 2,
       });
-      console.log('Initial park boundaries seeded successfully');
+
+      await batch.commit();
     }
   } catch (err) {
-    console.error('Error during Firestore initial seeding:', err);
+    console.error('Error during Firestore v2 initial seeding:', err);
   }
 }
 
+function sortActivitiesByTime(items: Activity[]): Activity[] {
+  const dayRank: Record<string, number> = {
+    Hoy: 0,
+    Mañana: 1,
+    Miércoles: 2,
+    Jueves: 3,
+    Viernes: 4,
+    Sábado: 5,
+    Domingo: 6,
+  };
+  return [...items].sort((a, b) => {
+    const rankA = dayRank[a.dayLabel || 'Hoy'] ?? 3;
+    const rankB = dayRank[b.dayLabel || 'Hoy'] ?? 3;
+    if (rankA !== rankB) return rankA - rankB;
+    return (a.startTime || '00:00').localeCompare(b.startTime || '00:00');
+  });
+}
+
 /**
- * Real-time subscription to activities collection.
+ * Real-time subscription to activities collection (Parque Almagro only).
  */
 export function subscribeToActivities(
   onUpdate: (activities: Activity[]) => void,
@@ -195,38 +163,27 @@ export function subscribeToActivities(
 ): () => void {
   const activitiesRef = collection(db, 'activities');
   const deviceId = getDeviceId();
-  
+
   return onSnapshot(
     activitiesRef,
     (snapshot) => {
       const items: Activity[] = [];
       snapshot.forEach((docSnap) => {
+        if (LEGACY_V1_SEED_IDS.has(docSnap.id)) return;
         const data = docSnap.data();
-        const attendeeUids = Array.isArray(data.attendeeUids) ? data.attendeeUids : [];
-        const isAttending = attendeeUids.includes(deviceId) || Boolean(data.isAttending);
-
-        items.push({
-          id: docSnap.id,
-          title: data.title || '',
-          description: data.description || '',
-          locationName: data.locationName || '',
-          lat: Number(data.lat),
-          lng: Number(data.lng),
-          date: data.date || '',
-          rawDate: data.rawDate || '',
-          category: data.category || 'social',
-          creatorName: data.creatorName || '',
-          creatorRole: data.creatorRole || '',
-          creatorAvatar: data.creatorAvatar || '',
-          attendeesCount: Number(data.attendeesCount) || 1,
-          isAttending,
-          status: data.status || 'activa',
-          safetyTip: data.safetyTip,
-        });
+        items.push(
+          normalizeActivityToV2(
+            {
+              ...data,
+              id: docSnap.id,
+            },
+            deviceId
+          )
+        );
       });
 
       if (items.length > 0) {
-        onUpdate(items);
+        onUpdate(sortActivitiesByTime(items));
       }
     },
     (err) => {
@@ -237,295 +194,121 @@ export function subscribeToActivities(
 }
 
 /**
- * Real-time subscription to forum posts collection.
- * Reliably fires whenever any user across any device adds, deletes, or comments on a thread.
- */
-export function subscribeToForumPosts(
-  onUpdate: (posts: ForumPost[]) => void,
-  onError?: (error: Error) => void
-): () => void {
-  const postsRef = collection(db, 'forum_posts');
-  const currentDeviceId = getDeviceId();
-
-  return onSnapshot(
-    postsRef,
-    (snapshot) => {
-      const items: ForumPost[] = [];
-      
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const likedBy = Array.isArray(data.likedBy) ? data.likedBy : [];
-        const isOwner = isPostOwnedByDevice(docSnap.id, data.creatorUid);
-
-        items.push({
-          id: docSnap.id,
-          authorName: data.authorName || 'Vecino',
-          authorAvatar: data.authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-          authorBadge: data.authorBadge || undefined,
-          timeAgo: data.timeAgo || 'Recién',
-          category: data.category || 'Ideas',
-          content: data.content || '',
-          imageUrl: data.imageUrl || undefined,
-          isOwner,
-          likes: Number(data.likes) || 0,
-          isLiked: likedBy.includes(currentDeviceId),
-          commentsCount: Number(data.commentsCount) || (Array.isArray(data.comments) ? data.comments.length : 0),
-          comments: Array.isArray(data.comments) ? data.comments : [],
-          tag: data.tag || undefined,
-          createdAt: getTimestampForPost(data, docSnap.id),
-        } as ForumPost & { createdAt: number });
-      });
-
-      // Sort with newest posts strictly at top (descending by timestamp)
-      items.sort((a, b) => {
-        const timeA = (a as any).createdAt || 0;
-        const timeB = (b as any).createdAt || 0;
-        return timeB - timeA;
-      });
-
-      // Deliver live posts to listener
-      onUpdate(items);
-    },
-    (err) => {
-      console.error('Firestore forum posts snapshot error:', err);
-      if (onError) onError(err);
-    }
-  );
-}
-
-/**
- * Create or save an activity in real-time Firestore.
+ * Create a new Parque Almagro activity in real-time Firestore.
  */
 export async function createRealtimeActivity(activity: Activity): Promise<void> {
   const deviceId = getDeviceId();
   const docRef = doc(db, 'activities', activity.id);
+  const initialAttendees: Attendee[] =
+    activity.attendees && activity.attendees.length > 0
+      ? activity.attendees
+      : [
+          {
+            uid: deviceId,
+            name: formatNeighborShortName(activity.creatorName),
+            role: 'Organizador',
+            verified: true,
+          },
+        ];
+
   const cleanData = sanitizeForFirestore({
     ...activity,
     creatorUid: deviceId,
-    attendeeUids: [deviceId],
+    attendees: initialAttendees,
+    attendeeUids: initialAttendees.map((a) => a.uid),
+    attendeesCount: initialAttendees.length,
+    schemaVersion: 2,
     createdAt: Date.now(),
   });
   await setDoc(docRef, cleanData);
 }
 
 /**
- * Update attendance for an activity in real-time Firestore.
+ * Toggle attendance and update visible attendee list ("Compañía visible") in real-time Firestore.
  */
 export async function updateRealtimeAttendance(
   activityId: string,
-  isAttending: boolean
+  shouldAttend: boolean,
+  neighborDisplayName?: string
 ): Promise<void> {
   const deviceId = getDeviceId();
   const docRef = doc(db, 'activities', activityId);
-  
-  if (isAttending) {
-    await updateDoc(docRef, {
-      attendeesCount: increment(1),
-      attendeeUids: arrayUnion(deviceId),
-    });
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const existingAttendees: Attendee[] = Array.isArray(data.attendees) ? [...data.attendees] : [];
+  const existingUids: string[] = Array.isArray(data.attendeeUids) ? [...data.attendeeUids] : [];
+  const shortName = formatNeighborShortName(neighborDisplayName || getSavedNeighborName() || 'Vecino A.');
+
+  let nextAttendees: Attendee[];
+  let nextUids: string[];
+
+  if (shouldAttend) {
+    const filtered = existingAttendees.filter((a) => a.uid !== deviceId);
+    nextAttendees = [
+      ...filtered,
+      {
+        uid: deviceId,
+        name: shortName,
+        role: 'Vecino',
+        verified: true,
+      },
+    ];
+    nextUids = Array.from(new Set([...existingUids, deviceId]));
   } else {
-    await updateDoc(docRef, {
-      attendeesCount: increment(-1),
-      attendeeUids: arrayRemove(deviceId),
-    });
+    nextAttendees = existingAttendees.filter((a) => a.uid !== deviceId);
+    nextUids = existingUids.filter((uid) => uid !== deviceId);
   }
-}
 
-/**
- * Create a new forum post in real-time Firestore.
- * Strips all undefined fields to guarantee successful Firestore delivery.
- */
-export async function createRealtimeForumPost(
-  post: ForumPost
-): Promise<void> {
-  const deviceId = getDeviceId();
-  const docRef = doc(db, 'forum_posts', post.id);
+  const nextCount = Math.max(nextAttendees.length, 0);
 
-  // Track ownership on this device
-  trackCreatedPost(post.id);
-
-  const cleanData = sanitizeForFirestore({
-    ...post,
-    creatorUid: deviceId,
-    likedBy: [deviceId],
-    likes: Number(post.likes) || 1,
-    commentsCount: 0,
-    comments: [],
-    createdAt: Date.now(),
-  });
-
-  await setDoc(docRef, cleanData);
-}
-
-/**
- * Delete a forum post from real-time Firestore (by author).
- */
-export async function deleteRealtimeForumPost(postId: string): Promise<void> {
-  untrackCreatedPost(postId);
-  const docRef = doc(db, 'forum_posts', postId);
-  await deleteDoc(docRef);
-}
-
-/**
- * Toggle like on a forum post in real-time Firestore.
- */
-export async function toggleRealtimePostLike(
-  postId: string,
-  currentlyLiked: boolean
-): Promise<void> {
-  const deviceId = getDeviceId();
-  const docRef = doc(db, 'forum_posts', postId);
-  
-  if (currentlyLiked) {
-    await updateDoc(docRef, {
-      likes: increment(-1),
-      likedBy: arrayRemove(deviceId),
-    });
-  } else {
-    await updateDoc(docRef, {
-      likes: increment(1),
-      likedBy: arrayUnion(deviceId),
-    });
-  }
-}
-
-/**
- * Add a comment/reply to a forum post thread in real-time Firestore.
- * Strips undefined properties (e.g. replyToAuthor) before arrayUnion.
- */
-export async function addRealtimeComment(
-  postId: string,
-  comment: ForumComment
-): Promise<void> {
-  const docRef = doc(db, 'forum_posts', postId);
-  const cleanComment = sanitizeForFirestore(comment);
-  
   await updateDoc(docRef, {
-    comments: arrayUnion(cleanComment),
+    attendees: nextAttendees.map((a) => sanitizeForFirestore(a)),
+    attendeeUids: nextUids,
+    attendeesCount: nextCount,
+  });
+}
+
+// Keep legacy forum/boundary exports so any older module still compiles cleanly
+export function subscribeToForumPosts(
+  onUpdate: (posts: ForumPost[]) => void
+): () => void {
+  onUpdate([]);
+  return () => {};
+}
+
+export async function createRealtimeForumPost(post: ForumPost): Promise<void> {
+  const docRef = doc(db, 'forum_posts', post.id);
+  await setDoc(docRef, sanitizeForFirestore(post));
+}
+
+export async function deleteRealtimeForumPost(postId: string): Promise<void> {
+  await deleteDoc(doc(db, 'forum_posts', postId));
+}
+
+export async function toggleRealtimePostLike(postId: string, currentlyLiked: boolean): Promise<void> {
+  await updateDoc(doc(db, 'forum_posts', postId), {
+    likes: increment(currentlyLiked ? -1 : 1),
+  });
+}
+
+export async function addRealtimeComment(postId: string, comment: ForumComment): Promise<void> {
+  await updateDoc(doc(db, 'forum_posts', postId), {
+    comments: arrayUnion(sanitizeForFirestore(comment)),
     commentsCount: increment(1),
   });
 }
 
-/**
- * Toggle like on a comment in a forum thread.
- */
-export async function toggleRealtimeCommentLike(
-  postId: string,
-  commentId: string
-): Promise<void> {
-  const docRef = doc(db, 'forum_posts', postId);
-  
-  const postSnap = await getDoc(docRef);
-  if (!postSnap.exists()) return;
+export async function toggleRealtimeCommentLike(_postId: string, _commentId: string): Promise<void> {}
 
-  const data = postSnap.data();
-  const comments: ForumComment[] = Array.isArray(data.comments) ? [...data.comments] : [];
-  
-  const updatedComments = comments.map((c) => {
-    if (c.id === commentId) {
-      const isLiked = !c.isLiked;
-      return {
-        ...c,
-        isLiked,
-        likes: isLiked ? c.likes + 1 : Math.max(0, c.likes - 1),
-      };
-    }
-    return c;
-  });
-
-  const cleanComments = updatedComments.map(c => sanitizeForFirestore(c));
-
-  await updateDoc(docRef, {
-    comments: cleanComments,
-  });
-}
-
-/**
- * Real-time subscription to shared park boundaries in Firestore.
- * Ensures all users across all devices always view the exact same synchronized park limits.
- */
 export function subscribeToParkBoundaries(
-  onUpdate: (coords: [number, number][]) => void,
-  onError?: (error: Error) => void
+  onUpdate: (coords: [number, number][]) => void
 ): () => void {
-  const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
-
-  return onSnapshot(
-    boundariesDocRef,
-    (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (Array.isArray(data.polygonCoords) && data.polygonCoords.length >= 3) {
-          const parsedCoords: [number, number][] = data.polygonCoords
-            .map((point: any) => {
-              if (Array.isArray(point)) {
-                return [Number(point[0]), Number(point[1])] as [number, number];
-              }
-              if (point && typeof point === 'object' && 'lat' in point && 'lng' in point) {
-                return [Number(point.lat), Number(point.lng)] as [number, number];
-              }
-              return [0, 0] as [number, number];
-            })
-            .filter(([lat, lng]) => !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0);
-
-          if (parsedCoords.length >= 3) {
-            if (typeof localStorage !== 'undefined') {
-              localStorage.setItem('parques_vivos_custom_polygon_v4', JSON.stringify(parsedCoords));
-            }
-            onUpdate(parsedCoords);
-          }
-        }
-      }
-    },
-    (err) => {
-      console.error('Firestore park boundaries snapshot error:', err);
-      if (onError) onError(err);
-    }
-  );
+  onUpdate(PARQUE_ALMAGRO_BOUNDS_POLYGON);
+  return () => {};
 }
 
-/**
- * Save updated park perimeter boundaries to Firestore so all users see the update in real-time.
- */
-export async function saveRealtimeParkBoundaries(
-  coords: [number, number][]
-): Promise<void> {
-  const deviceId = getDeviceId();
-  const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
-  const serialized = coords.map(([lat, lng]) => ({
-    lat: Number(lat),
-    lng: Number(lng),
-  }));
-
-  await setDoc(boundariesDocRef, {
-    polygonCoords: serialized,
-    updatedAt: Date.now(),
-    updatedBy: deviceId,
-  });
-
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('parques_vivos_custom_polygon_v4', JSON.stringify(coords));
-  }
-}
-
-/**
- * Reset park perimeter boundaries back to official default in Firestore for all users.
- */
-export async function resetRealtimeParkBoundaries(): Promise<void> {
-  const deviceId = getDeviceId();
-  const boundariesDocRef = doc(db, 'park_settings', 'boundaries');
-  const serialized = PARQUE_ALMAGRO_BOUNDS_POLYGON.map(([lat, lng]) => ({
-    lat: Number(lat),
-    lng: Number(lng),
-  }));
-
-  await setDoc(boundariesDocRef, {
-    polygonCoords: serialized,
-    updatedAt: Date.now(),
-    updatedBy: deviceId,
-  });
-
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('parques_vivos_custom_polygon_v4');
-  }
-}
+export async function saveRealtimeParkBoundaries(_coords: [number, number][]): Promise<void> {}
+export async function resetRealtimeParkBoundaries(): Promise<void> {}
+export { arrayRemove };

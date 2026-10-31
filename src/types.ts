@@ -1,22 +1,67 @@
 export type CategoryType = 'deporte' | 'mascotas' | 'cultura' | 'seguridad' | 'infantil' | 'social';
 
+export type SchematicZoneId =
+  | 'maquinas'
+  | 'sendero-norte'
+  | 'explanada'
+  | 'escalinata'
+  | 'canil'
+  | 'juegos'
+  | 'metro'
+  | 'pradera-poniente'
+  | 'sacramentinos';
+
+export type TimeFilter = 'hoy' | 'manana' | 'semana' | 'antes-1930';
+
+export type DayOption = 'Hoy' | 'Mañana' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado' | 'Domingo';
+
+export interface ParkLandmark {
+  id: string;
+  name: string;
+  shortLabel: string;
+  streetRef: string;
+  description: string;
+  category: 'transporte' | 'deporte' | 'patrimonio' | 'servicios' | 'entorno';
+  x: number;
+  y: number;
+  /** Linked activity zone if users want to schedule an activity right here */
+  zoneId?: SchematicZoneId;
+}
+
+export interface Attendee {
+  uid: string;
+  name: string; // Privacy-safe format: "Nombre I." (e.g., "Daniela P.")
+  role: string; // e.g., "Vecina", "Estudiante", "Organizador"
+  verified?: boolean;
+}
+
 export interface Activity {
   id: string;
   title: string;
   description: string;
   locationName: string;
+  zoneId?: SchematicZoneId;
   lat: number;
   lng: number;
-  date: string; // e.g. "Hoy, 18:30 hrs" or "Sábado 10:00 hrs"
+  date: string; // e.g. "Hoy · 10:30–11:30"
+  dayLabel?: DayOption | string;
+  startTime?: string; // "HH:MM" (24h), e.g., "10:30"
+  endTime?: string; // "HH:MM" (24h), e.g., "11:30"
+  durationMinutes?: number;
+  suggestedCapacity?: number; // Aforo sugerido (no excluyente)
+  repeatsWeekly?: boolean;
   rawDate: string;
   category: CategoryType;
   creatorName: string;
   creatorRole: string;
   creatorAvatar: string;
+  creatorVerified?: boolean;
   attendeesCount: number;
+  attendees?: Attendee[];
   isAttending?: boolean;
   status: 'activa' | 'proxima' | 'finalizada';
   safetyTip?: string;
+  schemaVersion?: number;
 }
 
 export type ForumCategory = 'Todas' | 'Ideas' | 'Reseñas' | 'Panorama';
