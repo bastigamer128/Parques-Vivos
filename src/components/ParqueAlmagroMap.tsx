@@ -6,6 +6,7 @@ import {
   PARK_MAP_WIDTH,
   SCHEMATIC_ZONES,
   getSchematicZone,
+  projectUserLocationToParkMap,
 } from '../data/mockData';
 
 interface ParqueAlmagroMapProps {
@@ -103,6 +104,13 @@ export const ParqueAlmagroMap: React.FC<ParqueAlmagroMapProps> = ({
   const [selectedLandmark, setSelectedLandmark] = useState<ParkLandmark | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
+  // User live location inside Parque Almagro (null whenever outside the park or permission not granted)
+  const [userParkPosition, setUserParkPosition] = useState<{ x: number; y: number } | null>(null);
+  const [locationState, setLocationState] = useState<
+    'idle' | 'in-park' | 'out-of-park' | 'denied' | 'unavailable'
+  >('idle');
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
+
   const zoomRef = useRef<number>(zoom);
   zoomRef.current = zoom;
   const minZoomRef = useRef<number>(minZoom);
@@ -150,6 +158,97 @@ export const ParqueAlmagroMap: React.FC<ParqueAlmagroMapProps> = ({
       return () => ro.disconnect();
     }
   }, []);
+
+  // Watch user geolocation strictly client-side; only set userParkPosition if inside Parque Almagro
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setLocationState('unavailable');
+      return;
+    }
+
+    const handlePosition = (pos: GeolocationPosition) => {
+      const projected = projectUserLocationToParkMap(
+        pos.coords.latitude,
+        pos.coords.longitude
+      );
+      if (projected) {
+        setUserParkPosition(projected);
+        setLocationState('in-park');
+      } else {
+        setUserParkPosition(null);
+        setLocationState('out-of-park');
+      }
+    };
+
+    const handleError = (err: GeolocationPositionError) => {
+      setUserParkPosition(null);
+      setLocationState(err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable');
+    };
+
+    const watchId = navigator.geolocation.watchPosition(handlePosition, handleError, {
+      enableHighAccuracy: true,
+      maximumAge: 10000,
+      timeout: 15000,
+    });
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
+
+  const showTemporaryLocationNotice = (msg: string) => {
+    setLocationNotice(msg);
+    window.setTimeout(() => {
+      setLocationNotice((prev) => (prev === msg ? null : prev));
+    }, 3600);
+  };
+
+  const handleLocateUserClick = () => {
+    if (userParkPosition && locationState === 'in-park') {
+      focusMapPoint(userParkPosition.x, userParkPosition.y, Math.max(zoomRef.current, 1.08));
+      showTemporaryLocationNotice('Estás dentro del Parque Almagro');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      showTemporaryLocationNotice('Tu navegador no dispone de geolocalización.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const projected = projectUserLocationToParkMap(
+          pos.coords.latitude,
+          pos.coords.longitude
+        );
+        if (projected) {
+          setUserParkPosition(projected);
+          setLocationState('in-park');
+          focusMapPoint(projected.x, projected.y, Math.max(zoomRef.current, 1.08));
+          showTemporaryLocationNotice('Ubicación activa dentro del Parque Almagro');
+        } else {
+          setUserParkPosition(null);
+          setLocationState('out-of-park');
+          showTemporaryLocationNotice(
+            'Estás fuera del Parque Almagro · El punto azul solo se muestra si estás en el parque'
+          );
+        }
+      },
+      (err) => {
+        setUserParkPosition(null);
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationState('denied');
+          showTemporaryLocationNotice(
+            'Permite el acceso a tu ubicación para ver tu punto azul cuando estés en el parque'
+          );
+        } else {
+          setLocationState('unavailable');
+          showTemporaryLocationNotice('No se pudo obtener tu ubicación actual.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+    );
+  };
 
   // Synchronously anchor scrollLeft & scrollTop before browser paint whenever zoom changes
   useLayoutEffect(() => {
@@ -877,6 +976,40 @@ export const ParqueAlmagroMap: React.FC<ParqueAlmagroMapProps> = ({
                 );
               });
             })}
+
+            {/* 11. User Live Blue Dot (Rendered ONLY when the user is physically inside Parque Almagro) */}
+            {userParkPosition ? (
+              <div
+                role="img"
+                aria-label="Tu ubicación actual dentro del Parque Almagro"
+                style={{
+                  left: `${(userParkPosition.x / PARK_MAP_WIDTH) * 100}%`,
+                  top: `${(userParkPosition.y / PARK_MAP_HEIGHT) * 100}%`,
+                }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none flex flex-col items-center"
+              >
+                <div className="relative flex items-center justify-center w-9 h-9">
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-0 rounded-full bg-[#3b82f6]/30 animate-ping"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="absolute w-7 h-7 rounded-full bg-[#3b82f6]/20 border border-[#3b82f6]/45"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="relative w-4 h-4 rounded-full bg-[#2563eb] border-[2.5px] border-white shadow-md"
+                  />
+                </div>
+                <span
+                  aria-hidden="true"
+                  className="-mt-1 px-1.5 py-0.2 rounded-full bg-[#1d4ed8] text-white text-[9.5px] font-extrabold tracking-tight shadow-2xs border border-white/80"
+                >
+                  Tú
+                </span>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -942,7 +1075,44 @@ export const ParqueAlmagroMap: React.FC<ParqueAlmagroMapProps> = ({
           >
             {isAtMinZoom ? '1x' : 'Todo'}
           </button>
+          <button
+            type="button"
+            onClick={handleLocateUserClick}
+            aria-label="Ver mi ubicación en el Parque Almagro"
+            title={
+              locationState === 'in-park'
+                ? 'Centrar en tu ubicación dentro del parque'
+                : 'Comprobar si estás dentro del Parque Almagro'
+            }
+            className={`w-9 h-8 rounded-xl border text-xs font-black shadow-xs flex items-center justify-center cursor-pointer transition-colors ${
+              locationState === 'in-park'
+                ? 'bg-[#2563eb] text-white border-white'
+                : 'bg-white/95 hover:bg-white text-[#1d4ed8] border-[#c6d6c2]'
+            }`}
+          >
+            <span
+              aria-hidden="true"
+              className={`w-3 h-3 rounded-full border-2 ${
+                locationState === 'in-park'
+                  ? 'bg-white border-blue-200'
+                  : 'bg-[#2563eb] border-blue-200'
+              }`}
+            />
+          </button>
         </div>
+
+        {/* Location status feedback banner */}
+        {locationNotice ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="absolute top-12 left-2.5 right-14 z-30 pointer-events-none"
+          >
+            <p className="inline-block bg-[#16241b]/92 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-sm">
+              {locationNotice}
+            </p>
+          </div>
+        ) : null}
 
         {/* Empty filter notice pill (non-blocking so user can still explore the park!) */}
         {activities.length === 0 && !selectedLandmark ? (

@@ -617,12 +617,63 @@ export const PARQUE_ALMAGRO_BOUNDS_POLYGON: [number, number][] = [
   [-33.45240, -70.64890],
 ];
 
+/**
+ * Projects a real-world GPS coordinate (lat, lng) onto the 960x600 Parque Almagro canvas
+ * accounting for the ~7° NE street-grid tilt of Calle Santa Isabel & Mensía de los Nidos.
+ * Returns null if the user is outside Parque Almagro.
+ */
+export function projectUserLocationToParkMap(
+  lat: number,
+  lng: number
+): { x: number; y: number } | null {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  const westLng = -70.65735; // Calle Dieciocho
+  const eastLng = -70.64900; // Arturo Prat / Basílica de los Sacramentinos
+  const u = (lng - westLng) / (eastLng - westLng);
+
+  // North (Calle Santa Isabel) and South (Calle Mensía de los Nidos) latitudes at longitude u
+  const northLatAtU = -33.45165 + u * (-33.45075 - -33.45165);
+  const southLatAtU = -33.45285 + u * (-33.45195 - -33.45285);
+  const v = (northLatAtU - lat) / (northLatAtU - southLatAtU);
+
+  // Only show the blue dot if the user is inside Parque Almagro (including immediate perimeter sidewalks)
+  if (u < -0.04 || u > 1.04 || v < -0.08 || v > 1.08) {
+    return null;
+  }
+
+  // Piecewise East-West mapping aligned with the exact cross-streets on the 960px canvas
+  const stops: Array<{ lng: number; x: number }> = [
+    { lng: -70.65735, x: 36 },  // Calle Dieciocho
+    { lng: -70.65585, x: 238 }, // San Ignacio de Loyola
+    { lng: -70.65435, x: 434 }, // Lord Cochrane
+    { lng: -70.65245, x: 644 }, // Nataniel Cox
+    { lng: -70.65055, x: 840 }, // Av. San Diego
+    { lng: -70.64900, x: 946 }, // Arturo Prat / Sacramentinos
+  ];
+
+  let x = 36 + Math.min(Math.max(u, 0), 1) * (946 - 36);
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i];
+    const b = stops[i + 1];
+    if (lng >= a.lng && lng <= b.lng) {
+      const segT = (lng - a.lng) / (b.lng - a.lng);
+      x = a.x + segT * (b.x - a.x);
+      break;
+    }
+  }
+
+  const clampedV = Math.min(Math.max(v, -0.04), 1.04);
+  const y = 74 + clampedV * (463 - 74);
+
+  return {
+    x: Math.round(Math.min(Math.max(x, 24), PARK_MAP_WIDTH - 24)),
+    y: Math.round(Math.min(Math.max(y, 58), PARK_MAP_HEIGHT - 64)),
+  };
+}
+
 export function isPointInsideParqueAlmagro(lat: number, lng: number): boolean {
-  const minLat = -33.45315;
-  const maxLat = -33.45105;
-  const minLng = -70.65775;
-  const maxLng = -70.64995;
-  return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+  return projectUserLocationToParkMap(lat, lng) !== null;
 }
 
 export const INITIAL_ACTIVITIES: Activity[] = V2_INITIAL_ACTIVITIES;
