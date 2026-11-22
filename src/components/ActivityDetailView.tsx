@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
+import { QrCode, X, Download } from 'lucide-react';
 import { Activity } from '../types';
 import { endsBefore1930, formatNeighborShortName } from '../data/mockData';
 
@@ -64,11 +66,14 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
     !currentNeighborName || openedViaInvite
   );
   const [isShareOpen, setIsShareOpen] = useState<boolean>(false);
+  const [isQrOpen, setIsQrOpen] = useState<boolean>(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [inviterNameInput, setInviterNameInput] = useState<string>(currentNeighborName || '');
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
   const enrollmentSectionRef = useRef<HTMLElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const qrDialogRef = useRef<HTMLDialogElement | null>(null);
 
   const suggestedCap = activity.suggestedCapacity || 12;
   const attendeesList = activity.attendees && activity.attendees.length > 0
@@ -195,6 +200,71 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
 
   const previewShareUrl = buildShareUrl();
 
+  // Generate QR code for the activity link and manage native modal dialog
+  useEffect(() => {
+    if (!isQrOpen) return;
+    let isMounted = true;
+
+    QRCode.toDataURL(previewShareUrl, {
+      width: 480,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#16241b',
+        light: '#ffffff',
+      },
+    })
+      .then((url) => {
+        if (isMounted) setQrDataUrl(url);
+      })
+      .catch((err) => {
+        console.error('Error generating activity QR code:', err);
+      });
+
+    const dialog = qrDialogRef.current;
+    if (dialog && !dialog.open) {
+      dialog.showModal();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isQrOpen, previewShareUrl]);
+
+  // Light-dismiss fallback for browsers without native <dialog closedby="any">
+  useEffect(() => {
+    const dialog = qrDialogRef.current;
+    if (!dialog || 'closedBy' in HTMLDialogElement.prototype) return;
+
+    const isOutside = (e: PointerEvent) => {
+      const r = dialog.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+
+    let pressedOutside = false;
+    const onPointerDown = (e: PointerEvent) => {
+      pressedOutside = isOutside(e);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (pressedOutside && isOutside(e)) {
+        dialog.close();
+      }
+      pressedOutside = false;
+    };
+
+    dialog.addEventListener('pointerdown', onPointerDown);
+    dialog.addEventListener('pointerup', onPointerUp);
+    return () => {
+      dialog.removeEventListener('pointerdown', onPointerDown);
+      dialog.removeEventListener('pointerup', onPointerUp);
+    };
+  }, []);
+
+  const handleOpenQrDialog = () => {
+    persistInviterIfNeeded();
+    setIsQrOpen(true);
+  };
+
   return (
     <div className="space-y-4 pb-4">
       {/* Top navigation & Share trigger */}
@@ -208,33 +278,44 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
           <span>Volver al mapa</span>
         </button>
 
-        <button
-          type="button"
-          aria-expanded={isShareOpen}
-          aria-controls="share-activity-panel"
-          onClick={() => setIsShareOpen((prev) => !prev)}
-          className={`inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-extrabold border transition-colors cursor-pointer ${
-            isShareOpen
-              ? 'bg-[#1f6a42] text-white border-[#1f6a42]'
-              : 'bg-white text-[#1f6a42] border-[#b7dac2] hover:bg-[#eef6f0]'
-          }`}
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            className="w-3.5 h-3.5 fill-none stroke-current"
-            strokeWidth={2.2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            aria-expanded={isShareOpen}
+            aria-controls="share-activity-panel"
+            onClick={() => setIsShareOpen((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-extrabold border transition-colors cursor-pointer ${
+              isShareOpen
+                ? 'bg-[#1f6a42] text-white border-[#1f6a42]'
+                : 'bg-white text-[#1f6a42] border-[#b7dac2] hover:bg-[#eef6f0]'
+            }`}
           >
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
-          <span>Compartir actividad</span>
-        </button>
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="w-3.5 h-3.5 fill-none stroke-current"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+            <span>Compartir actividad</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenQrDialog}
+            aria-label="Mostrar código QR de la actividad"
+            className="inline-flex items-center justify-center min-w-[38px] min-h-[38px] p-2 rounded-full bg-white text-[#1f6a42] border border-[#b7dac2] hover:bg-[#eef6f0] transition-colors cursor-pointer"
+          >
+            <QrCode aria-hidden="true" className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Invitation banner when user opens a shared activity link */}
@@ -577,6 +658,93 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
           })}
         </ul>
       </section>
+
+      {/* Native Modal Dialog for Activity QR Code */}
+      <dialog
+        ref={qrDialogRef}
+        id="activity-qr-dialog"
+        aria-labelledby="qr-dialog-title"
+        {...({ closedby: 'any' } as any)}
+        onClose={() => setIsQrOpen(false)}
+        className="m-auto w-[min(92vw,360px)] rounded-3xl bg-white p-0 border border-[#d5dfd4] shadow-2xl text-[#16241b]"
+      >
+        <div className="p-4 bg-[#1f6a42] text-white flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <QrCode aria-hidden="true" className="w-5 h-5 shrink-0 text-[#d4f2de]" />
+            <h2 id="qr-dialog-title" className="text-sm font-extrabold truncate">
+              Código QR de la actividad
+            </h2>
+          </div>
+          <form method="dialog">
+            <button
+              type="submit"
+              aria-label="Cerrar código QR"
+              className="p-1.5 rounded-full bg-black/20 hover:bg-black/35 text-white transition-colors cursor-pointer"
+            >
+              <X aria-hidden="true" className="w-4 h-4" />
+            </button>
+          </form>
+        </div>
+
+        <div className="p-5 text-center space-y-3.5">
+          <div>
+            <p className="text-base font-extrabold text-[#16241b] leading-snug">
+              {activity.title}
+            </p>
+            <p className="text-xs font-semibold text-[#526558] mt-0.5">
+              {activity.dayLabel || 'Hoy'} · {activity.startTime || '17:30'}–{activity.endTime || '18:30'} · {activity.locationName}
+            </p>
+            {formattedInviter ? (
+              <p className="text-xs font-bold text-[#1f6a42] mt-1">
+                Invita: {formattedInviter}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="inline-block p-3 bg-white rounded-2xl border-2 border-[#dfe6dd] shadow-xs">
+            {qrDataUrl ? (
+              <img
+                src={qrDataUrl}
+                alt={`Código QR para inscribirse en ${activity.title}`}
+                width={224}
+                height={224}
+                className="w-56 h-56 mx-auto rounded-xl object-contain"
+              />
+            ) : (
+              <div className="w-56 h-56 flex items-center justify-center text-xs font-semibold text-[#596c5f]">
+                Generando QR…
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-[#4b5e51] leading-relaxed">
+            Escanea este código con la cámara del celular para abrir directamente el formulario de inscripción.
+          </p>
+
+          <div className="flex flex-col gap-2 pt-1">
+            {qrDataUrl ? (
+              <a
+                href={qrDataUrl}
+                download={`qr-${activity.id}.png`}
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#1f6a42] hover:bg-[#185434] text-white text-xs font-extrabold inline-flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Download aria-hidden="true" className="w-4 h-4" />
+                <span>Guardar imagen QR</span>
+              </a>
+            ) : null}
+
+            <form method="dialog">
+              <button
+                type="submit"
+                autoFocus
+                className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-[#eef4ef] hover:bg-[#e1ece3] text-[#1c3323] text-xs font-extrabold transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </form>
+          </div>
+        </div>
+      </dialog>
     </div>
   );
 };

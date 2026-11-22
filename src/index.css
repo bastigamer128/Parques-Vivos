@@ -117,3 +117,15 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Native modal dialog scroll containment & backdrop */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background-color: rgba(22, 36, 27, 0.55);
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
