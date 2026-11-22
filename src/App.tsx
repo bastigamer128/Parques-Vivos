@@ -41,6 +41,21 @@ export default function App() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [preselectedZoneId, setPreselectedZoneId] = useState<SchematicZoneId | undefined>(undefined);
 
+  // Deep-link invitation parameters (?actividad=<id>&invitadoPor=<nombre>)
+  const [pendingInviteActivityId, setPendingInviteActivityId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('actividad');
+  });
+  const [invitedByName, setInvitedByName] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('invitadoPor');
+    return raw ? formatNeighborShortName(raw) : null;
+  });
+  const [openedViaInvite, setOpenedViaInvite] = useState<boolean>(false);
+  const [hasLoadedRealtime, setHasLoadedRealtime] = useState<boolean>(false);
+
   // Accessibility toggle for older neighbors (60+)
   const [isLargeFont, setIsLargeFont] = useState<boolean>(() => {
     return localStorage.getItem('parques_vivos_large_font') === 'true';
@@ -79,11 +94,42 @@ export default function App() {
   // Seed & subscribe to Firestore real-time updates
   useEffect(() => {
     seedInitialDataIfEmpty();
-    const unsubscribe = subscribeToActivities((liveActivities) => {
-      setActivities(liveActivities);
-    });
+    const unsubscribe = subscribeToActivities(
+      (liveActivities) => {
+        setActivities(liveActivities);
+        setHasLoadedRealtime(true);
+      },
+      () => {
+        setHasLoadedRealtime(true);
+      }
+    );
     return () => unsubscribe();
   }, []);
+
+  // Resolve incoming invitation deep-link (?actividad=<id>&invitadoPor=<nombre>)
+  useEffect(() => {
+    if (!pendingInviteActivityId) return;
+
+    const match = activities.find((a) => a.id === pendingInviteActivityId);
+    if (match) {
+      setHighlightedId(match.id);
+      setSelectedActivityId(match.id);
+      setCurrentTab('mapa');
+      setOpenedViaInvite(true);
+      setPendingInviteActivityId(null);
+      return;
+    }
+
+    if (hasLoadedRealtime) {
+      setPendingInviteActivityId(null);
+      setOpenedViaInvite(false);
+      setInvitedByName(null);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      showToast('La actividad de la invitación ya no está disponible.');
+    }
+  }, [pendingInviteActivityId, activities, hasLoadedRealtime]);
 
   // Derive filtered activities during render (no redundant effect)
   const filteredActivities = activities.filter((act) => {
@@ -125,14 +171,25 @@ export default function App() {
     setNeighborName(clean);
   };
 
+  const clearInviteUrlParams = () => {
+    setOpenedViaInvite(false);
+    setInvitedByName(null);
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  };
+
   const handleSelectTab = (tab: MainTab) => {
     setSelectedActivityId(null);
+    clearInviteUrlParams();
     setCurrentTab(tab);
   };
 
   const handleOpenActivityDetail = (activity: Activity) => {
     setHighlightedId(activity.id);
     setSelectedActivityId(activity.id);
+    setOpenedViaInvite(false);
+    setInvitedByName(null);
     setCurrentTab('mapa');
   };
 
@@ -272,9 +329,15 @@ export default function App() {
             <ActivityDetailView
               activity={selectedActivity}
               currentNeighborName={neighborName}
+              invitedBy={invitedByName}
+              openedViaInvite={openedViaInvite}
               onSaveNeighborName={handleSaveNeighborName}
-              onBack={() => setSelectedActivityId(null)}
+              onBack={() => {
+                setSelectedActivityId(null);
+                clearInviteUrlParams();
+              }}
               onToggleAttendance={handleToggleAttendance}
+              onNotify={showToast}
             />
           ) : currentTab === 'publicar' ? (
             <PublishActivityView
