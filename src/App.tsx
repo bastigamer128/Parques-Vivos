@@ -41,6 +41,7 @@ const FILTER_OPTIONS: Array<{ id: TimeFilter; label: string }> = [
   { id: 'manana', label: 'Mañana' },
   { id: 'semana', label: 'Toda la semana' },
   { id: 'antes-1930', label: 'Termina antes de las 19:30' },
+  { id: 'mis-inscripciones', label: 'Mis inscripciones' },
 ];
 
 export default function App() {
@@ -165,10 +166,13 @@ export default function App() {
   }, [pendingInviteActivityId, activities, hasLoadedRealtime]);
 
   // Derive filtered activities during render (no redundant effect)
+  const myEnrolledCount = activities.filter((act) => Boolean(act.isAttending)).length;
+
   const filteredActivities = activities.filter((act) => {
     if (activeFilter === 'hoy') return (act.dayLabel || 'Hoy') === 'Hoy';
     if (activeFilter === 'manana') return act.dayLabel === 'Mañana';
     if (activeFilter === 'antes-1930') return endsBefore1930(act.endTime, act.startTime);
+    if (activeFilter === 'mis-inscripciones') return Boolean(act.isAttending);
     return true; // 'semana'
   });
 
@@ -535,6 +539,10 @@ export default function App() {
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 touch-pan-x">
                   {FILTER_OPTIONS.map((opt) => {
                     const isActive = activeFilter === opt.id;
+                    const displayLabel =
+                      opt.id === 'mis-inscripciones' && myEnrolledCount > 0
+                        ? `${opt.label} (${myEnrolledCount})`
+                        : opt.label;
                     return (
                       <button
                         key={opt.id}
@@ -547,7 +555,7 @@ export default function App() {
                             : 'bg-white text-[#25372b] border-[#d7e0d5] hover:bg-[#f1f5f0]'
                         }`}
                       >
-                        {opt.label}
+                        {displayLabel}
                       </button>
                     );
                   })}
@@ -644,14 +652,22 @@ export default function App() {
                 ) : (
                   <div className="bg-white p-4 rounded-2xl border border-[#dfe6dd] text-center space-y-2">
                     <p className="text-sm text-[#495c4f]">
-                      Aún no hay actividades convocadas para este filtro.
+                      {activeFilter === 'mis-inscripciones'
+                        ? 'Aún no te has inscrito en ninguna actividad.'
+                        : 'Aún no hay actividades convocadas para este filtro.'}
                     </p>
                     <button
                       type="button"
-                      onClick={() => setCurrentTab('publicar')}
+                      onClick={() =>
+                        activeFilter === 'mis-inscripciones'
+                          ? setActiveFilter('semana')
+                          : setCurrentTab('publicar')
+                      }
                       className="text-sm font-extrabold text-[#1f6a42] underline cursor-pointer py-1 px-2"
                     >
-                      Publicar la primera actividad
+                      {activeFilter === 'mis-inscripciones'
+                        ? 'Explorar actividades de la semana'
+                        : 'Publicar la primera actividad'}
                     </button>
                   </div>
                 )}

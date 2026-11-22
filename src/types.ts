@@ -11,7 +11,7 @@ export type SchematicZoneId =
   | 'pradera-poniente'
   | 'sacramentinos';
 
-export type TimeFilter = 'hoy' | 'manana' | 'semana' | 'antes-1930';
+export type TimeFilter = 'hoy' | 'manana' | 'semana' | 'antes-1930' | 'mis-inscripciones';
 
 export type DayOption = 'Hoy' | 'Mañana' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado' | 'Domingo';
 
