@@ -4,28 +4,37 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Activity, Attendee, SchematicZoneId, TimeFilter } from './types';
+import { Activity, Attendee, ForumComment, ForumPost, SchematicZoneId, TimeFilter } from './types';
 import {
   V2_INITIAL_ACTIVITIES,
+  INITIAL_POSTS,
   endsBefore1930,
   formatNeighborShortName,
   normalizeActivityToV2,
 } from './data/mockData';
 import {
+  addRealtimeComment,
   createRealtimeActivity,
+  createRealtimeForumPost,
+  deleteRealtimeForumPost,
   getDeviceId,
   getSavedNeighborName,
   saveNeighborName,
   seedInitialDataIfEmpty,
   subscribeToActivities,
+  subscribeToForumPosts,
+  toggleRealtimeCommentLike,
+  toggleRealtimePostLike,
   updateRealtimeAttendance,
 } from './services/realtimeService';
 import { ParqueAlmagroMap } from './components/ParqueAlmagroMap';
 import { ActivityDetailView } from './components/ActivityDetailView';
 import { PublishActivityView } from './components/PublishActivityView';
+import { ForumView } from './components/ForumView';
 import { BottomNav, MainTab } from './components/BottomNav';
 
 const STORAGE_KEY_V2 = 'parques_vivos_almagro_v2_activities';
+const STORAGE_KEY_FORUM_V2 = 'parques_vivos_almagro_v2_forum_posts';
 
 const FILTER_OPTIONS: Array<{ id: TimeFilter; label: string }> = [
   { id: 'hoy', label: 'Hoy' },
@@ -81,6 +90,20 @@ export default function App() {
     return V2_INITIAL_ACTIVITIES;
   });
 
+  // Forum posts state (localStorage fast initial load + Firestore live sync)
+  const [forumPosts, setForumPosts] = useState<ForumPost[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_FORUM_V2);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    return INITIAL_POSTS;
+  });
+
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,10 +114,14 @@ export default function App() {
     localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(activities));
   }, [activities]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_FORUM_V2, JSON.stringify(forumPosts));
+  }, [forumPosts]);
+
   // Seed & subscribe to Firestore real-time updates
   useEffect(() => {
     seedInitialDataIfEmpty();
-    const unsubscribe = subscribeToActivities(
+    const unsubscribeActivities = subscribeToActivities(
       (liveActivities) => {
         setActivities(liveActivities);
         setHasLoadedRealtime(true);
@@ -103,7 +130,13 @@ export default function App() {
         setHasLoadedRealtime(true);
       }
     );
-    return () => unsubscribe();
+    const unsubscribeForum = subscribeToForumPosts((livePosts) => {
+      setForumPosts(livePosts);
+    });
+    return () => {
+      unsubscribeActivities();
+      unsubscribeForum();
+    };
   }, []);
 
   // Resolve incoming invitation deep-link (?actividad=<id>&invitadoPor=<nombre>)
@@ -154,6 +187,8 @@ export default function App() {
       document.title = `${selectedActivity.title} | Parque Almagro`;
     } else if (currentTab === 'publicar') {
       document.title = 'Publicar actividad | Parque Almagro';
+    } else if (currentTab === 'foro') {
+      document.title = 'Foro vecinal | Parque Almagro';
     } else {
       document.title = 'Parque Almagro | Actividades de los vecinos';
     }
@@ -281,6 +316,141 @@ export default function App() {
     }
   };
 
+  const handleAddForumPost = async (
+    category: 'Ideas' | 'Reseñas' | 'Panorama',
+    content: string,
+    authorName: string,
+    imageUrl?: string
+  ) => {
+    const cleanAuthor = formatNeighborShortName(authorName || neighborName || 'Vecino A.');
+    const newPost: ForumPost = {
+      id: `post-${Date.now()}`,
+      authorName: cleanAuthor,
+      authorAvatar: '',
+      authorBadge: 'Vecino · Parque Almagro',
+      timeAgo: 'Ahora',
+      category,
+      content,
+      imageUrl,
+      isOwner: true,
+      likes: 0,
+      isLiked: false,
+      commentsCount: 0,
+      comments: [],
+    };
+
+    setForumPosts((prev) => [newPost, ...prev]);
+    showToast('Hilo publicado en el foro vecinal.');
+
+    try {
+      await createRealtimeForumPost(newPost);
+    } catch (err) {
+      console.error('Error saving forum post to Firestore:', err);
+    }
+  };
+
+  const handleDeleteForumPost = async (postId: string) => {
+    setForumPosts((prev) => prev.filter((p) => p.id !== postId));
+    showToast('Publicación eliminada del foro.');
+
+    try {
+      await deleteRealtimeForumPost(postId);
+    } catch (err) {
+      console.error('Error deleting forum post:', err);
+    }
+  };
+
+  const handleToggleForumLike = async (postId: string) => {
+    const target = forumPosts.find((p) => p.id === postId);
+    if (!target) return;
+
+    const currentlyLiked = Boolean(target.isLiked);
+    setForumPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        return {
+          ...post,
+          isLiked: !currentlyLiked,
+          likes: Math.max(post.likes + (currentlyLiked ? -1 : 1), 0),
+        };
+      })
+    );
+
+    try {
+      await toggleRealtimePostLike(postId, currentlyLiked);
+    } catch (err) {
+      console.error('Error toggling forum post like:', err);
+    }
+  };
+
+  const handleAddForumComment = async (
+    postId: string,
+    content: string,
+    authorName: string,
+    replyToAuthor?: string
+  ) => {
+    const cleanAuthor = formatNeighborShortName(authorName || neighborName || 'Vecino A.');
+    const newComment: ForumComment = {
+      id: `comm-${Date.now()}`,
+      postId,
+      authorName: cleanAuthor,
+      authorAvatar: '',
+      authorBadge: 'Vecino · Parque Almagro',
+      timeAgo: 'Ahora',
+      content,
+      likes: 0,
+      isLiked: false,
+      replyToAuthor,
+    };
+
+    setForumPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        const nextComments = [...(post.comments || []), newComment];
+        return {
+          ...post,
+          comments: nextComments,
+          commentsCount: nextComments.length,
+        };
+      })
+    );
+
+    showToast('Comentario publicado.');
+
+    try {
+      await addRealtimeComment(postId, newComment);
+    } catch (err) {
+      console.error('Error adding forum comment:', err);
+    }
+  };
+
+  const handleToggleForumCommentLike = async (postId: string, commentId: string) => {
+    setForumPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        const nextComments = (post.comments || []).map((comm) => {
+          if (comm.id !== commentId) return comm;
+          const currentlyLiked = Boolean(comm.isLiked);
+          return {
+            ...comm,
+            isLiked: !currentlyLiked,
+            likes: Math.max(comm.likes + (currentlyLiked ? -1 : 1), 0),
+          };
+        });
+        return {
+          ...post,
+          comments: nextComments,
+        };
+      })
+    );
+
+    try {
+      await toggleRealtimeCommentLike(postId, commentId);
+    } catch (err) {
+      console.error('Error toggling forum comment like:', err);
+    }
+  };
+
   return (
     <div className={`min-h-dvh bg-[#eef1ec] flex justify-center ${isLargeFont ? 'large-font' : ''}`}>
       <a
@@ -345,6 +515,18 @@ export default function App() {
               initialZoneId={preselectedZoneId}
               onSaveOrganizerName={handleSaveNeighborName}
               onPublishActivity={handlePublishActivity}
+            />
+          ) : currentTab === 'foro' ? (
+            <ForumView
+              posts={forumPosts}
+              currentNeighborName={neighborName}
+              onSaveNeighborName={handleSaveNeighborName}
+              onToggleLike={handleToggleForumLike}
+              onAddPost={handleAddForumPost}
+              onDeletePost={handleDeleteForumPost}
+              onAddComment={handleAddForumComment}
+              onToggleCommentLike={handleToggleForumCommentLike}
+              onNotify={showToast}
             />
           ) : (
             <div className="space-y-3.5">

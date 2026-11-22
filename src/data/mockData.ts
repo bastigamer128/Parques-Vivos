@@ -677,7 +677,97 @@ export function isPointInsideParqueAlmagro(lat: number, lng: number): boolean {
 }
 
 export const INITIAL_ACTIVITIES: Activity[] = V2_INITIAL_ACTIVITIES;
-export const INITIAL_POSTS: ForumPost[] = [];
+export const INITIAL_POSTS: ForumPost[] = [
+  {
+    id: 'post-almagro-1',
+    authorName: 'Daniela P.',
+    authorAvatar: DEFAULT_AVATAR,
+    authorBadge: 'Vecina verificada · Santa Isabel',
+    timeAgo: 'Hace 2 h',
+    category: 'Ideas',
+    content:
+      '¡Hola vecinos! ¿Qué les parece si armamos un grupo fijo para caminar a paso rápido los martes y jueves a las 18:15 partiendo desde la salida del Metro Parque Almagro (L3)? Así aprovechamos de movernos acompañados antes de que oscurezca.',
+    likes: 7,
+    isLiked: false,
+    commentsCount: 2,
+    comments: [
+      {
+        id: 'comm-almagro-101',
+        postId: 'post-almagro-1',
+        authorName: 'Marta G.',
+        authorAvatar: DEFAULT_AVATAR,
+        authorBadge: 'Vecina · San Ignacio',
+        timeAgo: 'Hace 1 h',
+        content: '¡Me sumo! Ese horario antes de las 19:30 me acomoda muchísimo.',
+        likes: 3,
+        isLiked: false,
+      },
+      {
+        id: 'comm-almagro-102',
+        postId: 'post-almagro-1',
+        authorName: 'Camila V.',
+        authorAvatar: DEFAULT_AVATAR,
+        authorBadge: 'Vecina · Lord Cochrane',
+        timeAgo: 'Hace 40 min',
+        content: 'Buenísima idea Daniela, publícala en el mapa y la compartimos por WhatsApp.',
+        likes: 2,
+        isLiked: false,
+      },
+    ],
+  },
+  {
+    id: 'post-almagro-2',
+    authorName: 'Roberto S.',
+    authorAvatar: DEFAULT_AVATAR,
+    authorBadge: 'Vecino verificado · Nataniel Cox',
+    timeAgo: 'Hace 5 h',
+    category: 'Reseñas',
+    content:
+      'Hoy pasamos cerca de las 18:00 por el sector del Canil cerrado y las máquinas de ejercicio. Había bastantes vecinos con sus perros y el ambiente se sentía muy tranquilo y acompañado.',
+    likes: 9,
+    isLiked: false,
+    commentsCount: 1,
+    comments: [
+      {
+        id: 'comm-almagro-201',
+        postId: 'post-almagro-2',
+        authorName: 'Tomás H.',
+        authorAvatar: DEFAULT_AVATAR,
+        authorBadge: 'Vecino · San Diego',
+        timeAgo: 'Hace 3 h',
+        content: 'Totalmente de acuerdo, cuando nos coordinamos varios a la misma hora cambia mucho la percepción del parque.',
+        likes: 4,
+        isLiked: false,
+      },
+    ],
+  },
+  {
+    id: 'post-almagro-3',
+    authorName: 'Ernesto M.',
+    authorAvatar: DEFAULT_AVATAR,
+    authorBadge: 'Vecino verificado · Lord Cochrane',
+    timeAgo: 'Ayer',
+    category: 'Panorama',
+    content:
+      'Este sábado a las 16:00 estaremos en las mesas junto a la pérgola y juegos infantiles jugando ajedrez y dominó. Si alguien quiere llevar otro juego de mesa o simplemente pasar a conversar, ¡todos bienvenidos!',
+    likes: 11,
+    isLiked: false,
+    commentsCount: 1,
+    comments: [
+      {
+        id: 'comm-almagro-301',
+        postId: 'post-almagro-3',
+        authorName: 'Elena R.',
+        authorAvatar: DEFAULT_AVATAR,
+        authorBadge: 'Vecina · Santa Isabel',
+        timeAgo: 'Ayer',
+        content: 'Ahí estaremos don Ernesto, llevo un tablero extra y termo con té.',
+        likes: 5,
+        isLiked: false,
+      },
+    ],
+  },
+];
 export const ACTIVE_NEIGHBORS: Neighbor[] = [];
 export const INITIAL_USER: UserProfile = {
   name: 'Bastián N.',

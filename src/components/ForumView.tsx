@@ -1,71 +1,129 @@
-import React, { useState, useRef } from 'react';
-import { ForumPost, ForumCategory, ForumComment, UserProfile } from '../types';
+import React, { useRef, useState } from 'react';
+import { ForumCategory, ForumPost } from '../types';
+import { formatNeighborShortName } from '../data/mockData';
 import { containsProfanity, getProfanityWarning } from '../utils/profanityFilter';
-import { 
-  Heart, MessageCircle, Share2, Sparkles, Send, 
-  Lightbulb, Star, Compass, Plus, CheckCircle2, 
-  ShieldCheck, CornerDownRight, X, ChevronDown, ChevronUp, MessageSquare,
-  Trash2, Image as ImageIcon, AlertTriangle, Maximize2, Camera
+import {
+  Heart,
+  MessageCircle,
+  Send,
+  Plus,
+  CornerDownRight,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  Image as ImageIcon,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface ForumViewProps {
   posts: ForumPost[];
-  currentUser: UserProfile;
+  currentNeighborName: string;
+  onSaveNeighborName: (name: string) => void;
   onToggleLike: (postId: string) => void;
-  onAddPost: (category: 'Ideas' | 'Reseñas' | 'Panorama', content: string, imageUrl?: string) => void;
+  onAddPost: (
+    category: 'Ideas' | 'Reseñas' | 'Panorama',
+    content: string,
+    authorName: string,
+    imageUrl?: string
+  ) => void;
   onDeletePost: (postId: string) => void;
-  onAddComment: (postId: string, content: string, replyToAuthor?: string) => void;
+  onAddComment: (
+    postId: string,
+    content: string,
+    authorName: string,
+    replyToAuthor?: string
+  ) => void;
   onToggleCommentLike: (postId: string, commentId: string) => void;
+  onNotify?: (msg: string) => void;
 }
+
+const FORUM_CATEGORIES: ForumCategory[] = ['Todas', 'Ideas', 'Reseñas', 'Panorama'];
+
+const POST_CATEGORIES: Array<{
+  id: 'Ideas' | 'Reseñas' | 'Panorama';
+  label: string;
+  badgeStyle: string;
+}> = [
+  {
+    id: 'Ideas',
+    label: 'Ideas',
+    badgeStyle: 'bg-[#e4f2e8] text-[#1f6a42] border-[#b7dac2]',
+  },
+  {
+    id: 'Reseñas',
+    label: 'Reseñas',
+    badgeStyle: 'bg-[#eef2ed] text-[#283c2e] border-[#cbd6c9]',
+  },
+  {
+    id: 'Panorama',
+    label: 'Panorama',
+    badgeStyle: 'bg-[#f6efe9] text-[#7d4925] border-[#e4cfc0]',
+  },
+];
+
+const PRESET_IMAGES = [
+  {
+    label: 'Sendero y árboles',
+    url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    label: 'Canil y mascotas',
+    url: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=800&q=80',
+  },
+  {
+    label: 'Explanada central',
+    url: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=800&q=80',
+  },
+];
 
 export const ForumView: React.FC<ForumViewProps> = ({
   posts,
-  currentUser,
+  currentNeighborName,
+  onSaveNeighborName,
   onToggleLike,
   onAddPost,
   onDeletePost,
   onAddComment,
   onToggleCommentLike,
+  onNotify,
 }) => {
   const [selectedFilter, setSelectedFilter] = useState<ForumCategory>('Todas');
-  const [isWritingPost, setIsWritingPost] = useState(false);
-  const [newPostContent, setNewPostContent] = useState('');
+  const [isWritingPost, setIsWritingPost] = useState<boolean>(false);
+  const [authorInput, setAuthorInput] = useState<string>(currentNeighborName || '');
+  const [isEditingAuthor, setIsEditingAuthor] = useState<boolean>(!currentNeighborName);
+  const [newPostContent, setNewPostContent] = useState<string>('');
   const [newPostCategory, setNewPostCategory] = useState<'Ideas' | 'Reseñas' | 'Panorama'>('Ideas');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [profanityError, setProfanityError] = useState<string | null>(null);
   const [confirmDeletePostId, setConfirmDeletePostId] = useState<string | null>(null);
-  const [activeImageModal, setActiveImageModal] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // File input ref for image attachment
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const lastCompositionEndRef = useRef<number | null>(null);
 
-  // Set of post IDs that have their thread expanded in the feed
+  // Expanded comment threads
   const [expandedThreads, setExpandedThreads] = useState<Record<string, boolean>>({
-    'post-0': true,
-    'post-1': true,
+    'post-almagro-1': true,
+    'post-almagro-2': true,
   });
 
-  // State for active reply drafts keyed by postId
+  // Reply drafts and target author per postId
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-  // If replying to a specific author within the thread
   const [replyingTo, setReplyingTo] = useState<Record<string, string | undefined>>({});
-  // Comment profanity errors
   const [commentErrors, setCommentErrors] = useState<Record<string, string | null>>({});
-
-  const categories: ForumCategory[] = ['Todas', 'Ideas', 'Reseñas', 'Panorama'];
-
-  // Quick preset sample images of Parque Almagro
-  const presetImages = [
-    { label: '🌿 Atardecer Parque', url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80' },
-    { label: '🐕 Canil & Mascotas', url: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=800&q=80' },
-    { label: '🏛️ Explanada & Plaza', url: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=800&q=80' },
-  ];
 
   const filteredPosts = posts.filter((post) => {
     if (selectedFilter === 'Todas') return true;
     return post.category === selectedFilter;
   });
+
+  const resolveCurrentAuthor = (): string => {
+    const clean = formatNeighborShortName(authorInput || currentNeighborName || 'Vecino A.');
+    onSaveNeighborName(clean);
+    setAuthorInput(clean);
+    setIsEditingAuthor(false);
+    return clean;
+  };
 
   const toggleThread = (postId: string) => {
     setExpandedThreads((prev) => ({
@@ -77,9 +135,7 @@ export const ForumView: React.FC<ForumViewProps> = ({
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setNewPostContent(text);
-    if (containsProfanity(text)) {
-      setProfanityError('⚠️ Lenguaje inapropiado detectado: No está permitido publicar hilos con malas palabras o insultos.');
-    } else {
+    if (profanityError && !containsProfanity(text)) {
       setProfanityError(null);
     }
   };
@@ -88,8 +144,8 @@ export const ForumView: React.FC<ForumViewProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 8 * 1024 * 1024) {
-      alert('La imagen no debe superar los 8MB.');
+    if (file.size > 4 * 1024 * 1024) {
+      onNotify?.('La imagen no debe superar los 4 MB.');
       return;
     }
 
@@ -102,733 +158,655 @@ export const ForumView: React.FC<ForumViewProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handlePublishPost = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const content = newPostContent.trim();
-    if (!content) return;
+    const trimmed = newPostContent.trim();
+    if (!trimmed) return;
 
-    // Strict profanity filter check
-    if (containsProfanity(content)) {
-      setProfanityError('⚠️ No se puede publicar el hilo: Contiene lenguaje o términos inapropiados. Por favor mantén una convivencia respetuosa entre vecinos.');
+    const warning = getProfanityWarning(trimmed);
+    if (warning) {
+      setProfanityError(warning);
       return;
     }
 
-    onAddPost(newPostCategory, content, attachedImage || undefined);
-
-    // Reset form state
+    const cleanAuthor = resolveCurrentAuthor();
+    onAddPost(newPostCategory, trimmed, cleanAuthor, attachedImage || undefined);
     setNewPostContent('');
     setAttachedImage(null);
     setProfanityError(null);
     setIsWritingPost(false);
   };
 
-  const handleDeletePostConfirm = () => {
-    if (confirmDeletePostId) {
-      onDeletePost(confirmDeletePostId);
-      setConfirmDeletePostId(null);
+  const handleCommentDraftChange = (postId: string, value: string) => {
+    setReplyDrafts((prev) => ({ ...prev, [postId]: value }));
+    if (commentErrors[postId] && !containsProfanity(value)) {
+      setCommentErrors((prev) => ({ ...prev, [postId]: null }));
     }
   };
 
-  const handleShare = (postId: string) => {
-    setCopiedId(postId);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  const submitCommentForPost = (postId: string) => {
+    const draft = (replyDrafts[postId] || '').trim();
+    if (!draft) return;
 
-  const handleSendReply = (postId: string, e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const content = replyDrafts[postId]?.trim();
-    if (!content) return;
-
-    if (containsProfanity(content)) {
+    if (containsProfanity(draft)) {
       setCommentErrors((prev) => ({
         ...prev,
-        [postId]: 'Tu respuesta contiene palabras no permitidas. Mantén el respeto.',
+        [postId]: 'Por favor mantén un lenguaje respetuoso con los vecinos.',
       }));
       return;
     }
 
-    // Clear comment error
-    setCommentErrors((prev) => ({ ...prev, [postId]: null }));
-
+    const cleanAuthor = resolveCurrentAuthor();
     const targetAuthor = replyingTo[postId];
-    onAddComment(postId, content, targetAuthor);
+    onAddComment(postId, draft, cleanAuthor, targetAuthor);
 
-    // Clear reply draft and target
     setReplyDrafts((prev) => ({ ...prev, [postId]: '' }));
     setReplyingTo((prev) => ({ ...prev, [postId]: undefined }));
-
-    // Ensure thread stays expanded
+    setCommentErrors((prev) => ({ ...prev, [postId]: null }));
     setExpandedThreads((prev) => ({ ...prev, [postId]: true }));
   };
 
-  const setQuickReply = (postId: string, text: string) => {
-    const current = replyDrafts[postId] || '';
-    setReplyDrafts((prev) => ({
-      ...prev,
-      [postId]: current ? `${current} ${text}` : text,
-    }));
-  };
-
-  const getCategoryBadgeClass = (category: string) => {
-    switch (category) {
-      case 'Ideas':
-        return 'bg-amber-100 text-amber-800 border-amber-300';
-      case 'Reseñas':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      case 'Panorama':
-        return 'bg-sky-100 text-sky-800 border-sky-300';
-      default:
-        return 'bg-stone-100 text-stone-800 border-stone-200';
+  const handleCommentKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    postId: string
+  ) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+        return;
+      }
+      if (
+        lastCompositionEndRef.current !== null &&
+        Math.abs(e.nativeEvent.timeStamp - lastCompositionEndRef.current) < 50
+      ) {
+        return;
+      }
+      submitCommentForPost(postId);
     }
   };
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Ideas':
-        return <Lightbulb className="w-3 h-3 text-amber-600 inline mr-1" />;
-      case 'Reseñas':
-        return <Star className="w-3 h-3 text-emerald-600 inline mr-1" />;
-      case 'Panorama':
-        return <Compass className="w-3 h-3 text-sky-600 inline mr-1" />;
-      default:
-        return null;
-    }
+  const getCategoryStyle = (cat: 'Ideas' | 'Reseñas' | 'Panorama') => {
+    return (
+      POST_CATEGORIES.find((c) => c.id === cat)?.badgeStyle ||
+      'bg-[#e4f2e8] text-[#1f6a42] border-[#b7dac2]'
+    );
   };
 
   return (
-    <div className="w-full pb-24 bg-stone-100 min-h-screen">
-      {/* Subheader with title and quick CTA */}
-      <div className="bg-white border-b border-stone-200 px-4 py-3 sticky top-[57px] z-20 shadow-xs">
-        <div className="flex items-center justify-between mb-2.5">
-          <div>
-            <h2 className="font-extrabold text-stone-900 text-base sm:text-lg">
-              Foro Vecinal Almagro
-            </h2>
-            <p className="text-xs text-stone-500">
-              Hilos de conversación, ideas e iniciativas de vecinos
-            </p>
-          </div>
-
-          <button
-            onClick={() => setIsWritingPost(!isWritingPost)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-md shadow-orange-600/20 active:scale-95 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuevo Hilo</span>
-          </button>
+    <div className="space-y-4 pb-4">
+      {/* Header & CTA to open new post composer */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-extrabold text-[#16241b] tracking-tight leading-snug">
+            Foro vecinal
+          </h2>
+          <p className="text-xs font-medium text-[#596c5f] mt-0.5">
+            Ideas, reseñas del parque y conversación entre vecinos
+          </p>
         </div>
 
-        {/* Filter Pills: Todas, Ideas, Reseñas, Panorama */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
-          {categories.map((cat) => {
-            const isSelected = selectedFilter === cat;
+        <button
+          type="button"
+          aria-expanded={isWritingPost}
+          aria-controls="forum-new-post-panel"
+          onClick={() => {
+            setIsWritingPost((prev) => !prev);
+            setProfanityError(null);
+          }}
+          className={`inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-extrabold transition-colors cursor-pointer shrink-0 ${
+            isWritingPost
+              ? 'bg-[#eef4ef] text-[#1c3323] border border-[#cbd6c9]'
+              : 'bg-[#1f6a42] text-white hover:bg-[#185434]'
+          }`}
+        >
+          {isWritingPost ? (
+            <>
+              <X aria-hidden="true" className="w-3.5 h-3.5" />
+              <span>Cerrar</span>
+            </>
+          ) : (
+            <>
+              <Plus aria-hidden="true" className="w-3.5 h-3.5" />
+              <span>Nuevo hilo</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Neighbor Identity Bar (Nombre A.) */}
+      <div className="bg-white px-3.5 py-2.5 rounded-2xl border border-[#dfe6dd] flex flex-wrap items-center justify-between gap-2">
+        {isEditingAuthor ? (
+          <div className="w-full space-y-1.5">
+            <label
+              htmlFor="forum-neighbor-name"
+              className="block text-xs font-bold text-[#2f4335]"
+            >
+              Tu nombre para participar en el foro
+            </label>
+            <span id="forum-neighbor-hint" className="block text-xs text-[#596c5f]">
+              Se mostrará tu nombre e inicial (ej: Daniela P.).
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                id="forum-neighbor-name"
+                name="neighborName"
+                type="text"
+                autoComplete="given-name"
+                aria-describedby="forum-neighbor-hint"
+                value={authorInput}
+                onChange={(e) => setAuthorInput(e.target.value)}
+                placeholder="Ej: Bastián N."
+                className="flex-1 min-h-[42px] px-3 py-2 rounded-xl border border-[#cbd6c9] bg-[#fafcfa] text-sm font-semibold text-[#16241b]"
+              />
+              <button
+                type="button"
+                onClick={resolveCurrentAuthor}
+                className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#1f6a42] hover:bg-[#185434] text-white text-xs font-extrabold cursor-pointer"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-[#4b5e51]">
+              Participas como{' '}
+              <strong className="font-extrabold text-[#16241b]">
+                {currentNeighborName || formatNeighborShortName(authorInput || 'Vecino A.')}
+              </strong>
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsEditingAuthor(true)}
+              className="text-xs font-bold text-[#1f6a42] underline py-1 px-1 cursor-pointer"
+            >
+              Cambiar nombre
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Category Filter Pills wrapped in <search> */}
+      <search aria-label="Filtrar publicaciones del foro por categoría">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 touch-pan-x">
+          {FORUM_CATEGORIES.map((category) => {
+            const isActive = selectedFilter === category;
             return (
               <button
-                key={cat}
-                onClick={() => setSelectedFilter(cat)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 ${
-                  isSelected
-                    ? 'bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-400'
-                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200'
+                key={category}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setSelectedFilter(category)}
+                className={`shrink-0 min-h-[36px] px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-[#1f6a42] text-white border-[#1f6a42]'
+                    : 'bg-white text-[#25372b] border-[#d7e0d5] hover:bg-[#f1f5f0]'
                 }`}
               >
-                {cat === 'Todas' ? 'Todas' : (
-                  <>
-                    {getCategoryIcon(cat)}
-                    <span>{cat}</span>
-                  </>
-                )}
+                {category}
               </button>
             );
           })}
         </div>
-      </div>
+      </search>
 
-      <div className="p-4 max-w-lg mx-auto space-y-4">
-        {/* Inline Composer if user opened "Nuevo Hilo" */}
-        {isWritingPost && (
-          <form
-            onSubmit={handleCreatePost}
-            className="bg-white p-4 rounded-2xl border-2 border-emerald-500 shadow-lg animate-in slide-in-from-top-2 duration-200 space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                Iniciar Nuevo Hilo Vecinal
+      {/* Expandable New Post Form */}
+      {isWritingPost ? (
+        <section
+          id="forum-new-post-panel"
+          aria-labelledby="new-post-heading"
+          className="bg-white p-4 rounded-2xl border-2 border-[#b7dac2] shadow-xs space-y-3"
+        >
+          <h3 id="new-post-heading" className="text-sm font-extrabold text-[#16241b]">
+            Publicar en el foro del Parque Almagro
+          </h3>
+
+          <form aria-labelledby="new-post-heading" onSubmit={handlePublishPost} className="space-y-3">
+            <fieldset className="space-y-1.5">
+              <legend className="text-xs font-bold text-[#2f4335]">
+                Categoría del mensaje
+              </legend>
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                {POST_CATEGORIES.map((cat) => {
+                  const selected = newPostCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setNewPostCategory(cat.id)}
+                      className={`min-h-[38px] py-1.5 px-2.5 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
+                        selected
+                          ? 'bg-[#1f6a42] text-white border-[#1f6a42]'
+                          : 'bg-[#fafcfa] text-[#283c2e] border-[#cbd6c9] hover:bg-[#eef4ef]'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            <div>
+              <label
+                htmlFor="forum-post-content"
+                className="block text-xs font-bold text-[#2f4335] mb-1"
+              >
+                Tu mensaje para los vecinos
+              </label>
+              <span id="forum-post-hint" className="block text-xs text-[#596c5f] mb-1.5">
+                Comparte una idea de actividad, el estado de un sector o un panorama vecinal.
               </span>
-              <div className="flex gap-1.5">
-                {(['Ideas', 'Reseñas', 'Panorama'] as const).map((cat) => (
+              <textarea
+                id="forum-post-content"
+                name="postContent"
+                rows={3}
+                required
+                aria-invalid={Boolean(profanityError)}
+                aria-describedby={profanityError ? 'forum-post-hint forum-profanity-alert' : 'forum-post-hint'}
+                value={newPostContent}
+                onChange={handleContentChange}
+                placeholder="Escribe aquí tu mensaje…"
+                className="w-full p-3 rounded-xl border border-[#cbd6c9] bg-[#fafcfa] text-sm text-[#16241b] leading-relaxed"
+              />
+            </div>
+
+            {/* Optional photo attachment */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageFileChange}
+                  className="visually-hidden"
+                  id="forum-photo-upload"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl bg-[#eef4ef] hover:bg-[#e1ece3] text-[#1c3323] border border-[#cbd6c9] text-xs font-bold cursor-pointer"
+                >
+                  <ImageIcon aria-hidden="true" className="w-3.5 h-3.5 text-[#1f6a42]" />
+                  <span>{attachedImage ? 'Cambiar foto' : 'Adjuntar foto (opcional)'}</span>
+                </button>
+
+                {PRESET_IMAGES.map((preset) => (
                   <button
-                    key={cat}
+                    key={preset.label}
                     type="button"
-                    onClick={() => setNewPostCategory(cat)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                      newPostCategory === cat
-                        ? 'bg-emerald-700 text-white'
-                        : 'bg-stone-100 text-stone-600'
-                    }`}
+                    onClick={() => setAttachedImage(preset.url)}
+                    className="min-h-[36px] px-2.5 py-1 rounded-xl bg-[#fafcfa] hover:bg-[#eef4ef] text-[#35483b] border border-[#dfe6dd] text-[11px] font-semibold cursor-pointer"
                   >
-                    {cat}
+                    + {preset.label}
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Hidden file input for photo upload */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageFileChange}
-            />
-
-            <div className="space-y-1.5">
-              <textarea
-                required
-                rows={3}
-                value={newPostContent}
-                onChange={handleContentChange}
-                placeholder="¿Qué quieres proponer o compartir con la comunidad de Parque Almagro?"
-                className={`w-full p-3 rounded-xl border text-stone-900 text-sm focus:outline-none transition-colors ${
-                  profanityError
-                    ? 'border-rose-400 bg-rose-50/50 focus:ring-2 focus:ring-rose-400'
-                    : 'border-stone-200 focus:ring-2 focus:ring-emerald-500'
-                }`}
-              />
-
-              {/* Real-time Profanity Filter Warning */}
-              {profanityError && (
-                <div className="flex items-start gap-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium animate-in fade-in duration-200">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-                  <p>{profanityError}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Attached Image Preview */}
-            {attachedImage && (
-              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-300 bg-stone-50 p-1">
-                <div className="relative max-h-48 rounded-lg overflow-hidden">
+              {attachedImage ? (
+                <div className="relative rounded-xl overflow-hidden border border-[#cbd6c9] bg-[#f4f7f3]">
                   <img
                     src={attachedImage}
-                    alt="Foto adjunta"
-                    className="w-full h-40 object-cover rounded-lg"
+                    alt="Vista previa de imagen adjunta"
+                    className="w-full h-36 object-cover"
                   />
                   <button
                     type="button"
                     onClick={() => setAttachedImage(null)}
-                    aria-label="Quitar imagen"
-                    className="absolute top-2 right-2 p-1.5 bg-stone-900/80 hover:bg-rose-600 text-white rounded-full shadow-md transition-colors"
+                    aria-label="Quitar imagen adjunta"
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/65 hover:bg-black/80 text-white cursor-pointer"
                   >
-                    <X className="w-4 h-4" />
+                    <X aria-hidden="true" className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <div className="mt-1 px-1 flex items-center justify-between text-[11px] text-stone-500 font-medium">
-                  <span className="text-emerald-700 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Imagen adjunta
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setAttachedImage(null)}
-                    className="text-rose-600 hover:underline font-semibold"
-                  >
-                    Quitar foto
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Quick Image Tools: Attach from device or pick presets */}
-            <div className="pt-1 flex items-center justify-between flex-wrap gap-2 border-t border-stone-100">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-xs font-bold active:scale-95 transition-all"
-                >
-                  <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{attachedImage ? 'Cambiar Foto' : 'Adjuntar Foto'}</span>
-                </button>
-
-                {/* Preset shortcuts if no image yet */}
-                {!attachedImage && (
-                  <div className="hidden sm:flex items-center gap-1">
-                    <span className="text-[10px] text-stone-400 font-medium">o sugerencias:</span>
-                    {presetImages.map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => setAttachedImage(preset.url)}
-                        className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-emerald-50 hover:text-emerald-700 text-stone-600 text-[10px] font-semibold transition-colors"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 ml-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsWritingPost(false);
-                    setNewPostContent('');
-                    setAttachedImage(null);
-                    setProfanityError(null);
-                  }}
-                  className="px-3 py-1.5 rounded-xl text-stone-500 hover:text-stone-800 text-xs font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={Boolean(profanityError || !newPostContent.trim())}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold shadow-md transition-all active:scale-95 ${
-                    profanityError || !newPostContent.trim()
-                      ? 'bg-stone-300 cursor-not-allowed opacity-70'
-                      : 'bg-emerald-700 hover:bg-emerald-800'
-                  }`}
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Publicar Hilo</span>
-                </button>
-              </div>
+              ) : null}
             </div>
-          </form>
-        )}
 
-        {/* Posts Feed */}
-        {filteredPosts.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6">
-            <p className="text-stone-500 font-medium text-sm">
-              No hay publicaciones en la categoría &ldquo;{selectedFilter}&rdquo;.
-            </p>
-            <button
-              onClick={() => setSelectedFilter('Todas')}
-              className="mt-3 text-xs font-bold text-emerald-700 underline"
-            >
-              Ver todas las publicaciones
-            </button>
-          </div>
-        ) : (
-          filteredPosts.map((post) => {
-            const comments = post.comments || [];
-            const isThreadExpanded = !!expandedThreads[post.id];
-            const currentReplyText = replyDrafts[post.id] || '';
-            const replyingToUser = replyingTo[post.id];
-            const isAuthor = post.authorName === currentUser.name || Boolean(post.isOwner);
-
-            return (
-              <article
-                key={post.id}
-                className="bg-white rounded-2xl shadow-sm border border-stone-200/90 hover:border-emerald-300 transition-all overflow-hidden"
+            {profanityError ? (
+              <div
+                id="forum-profanity-alert"
+                role="alert"
+                className="p-3 rounded-xl bg-[#fef2f2] border border-[#f5c2c2] text-[#991b1b] text-xs font-bold flex items-start gap-2"
               >
-                {/* Main Post Header & Body */}
-                <div className="p-4 sm:p-5 pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img
-                          src={post.authorAvatar}
-                          alt={post.authorName}
-                          className="w-11 h-11 rounded-full object-cover border-2 border-emerald-400 shadow-xs"
-                        />
-                        <span className="absolute bottom-0 right-0 bg-white rounded-full p-0.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        </span>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-extrabold text-stone-900 text-sm sm:text-base leading-tight">
-                            {post.authorName}
-                          </h3>
-                          {isAuthor && (
-                            <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
-                              Tú (Autor)
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-stone-500 mt-0.5">
-                          {post.authorBadge && (
-                            <span className="font-semibold text-emerald-700">
-                              {post.authorBadge} •
-                            </span>
-                          )}
-                          <span>{post.timeAgo}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${getCategoryBadgeClass(post.category)}`}>
-                        {getCategoryIcon(post.category)}
-                        {post.category}
-                      </span>
-
-                      {/* Author Only: Delete Own Thread Button */}
-                      {isAuthor && (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeletePostId(post.id)}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 active:scale-95 transition-all ml-1 shadow-2xs"
-                          title="Borrar mi propio hilo"
-                          aria-label="Borrar mi hilo"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span className="hidden xs:inline">Borrar</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Post Content */}
-                  <p className="text-stone-800 text-sm sm:text-base leading-relaxed mt-3 whitespace-pre-line">
-                    {post.content}
-                  </p>
-
-                  {/* Post Attached Image if present */}
-                  {post.imageUrl && (
-                    <div 
-                      className="mt-3 rounded-2xl overflow-hidden border border-stone-200 bg-stone-100 relative group cursor-pointer"
-                      onClick={() => setActiveImageModal(post.imageUrl!)}
-                    >
-                      <img
-                        src={post.imageUrl}
-                        alt="Imagen del hilo"
-                        className="w-full max-h-72 sm:max-h-80 object-cover rounded-2xl group-hover:scale-[1.01] transition-transform duration-300"
-                        loading="lazy"
-                      />
-                      <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/60 backdrop-blur-xs text-white text-[11px] font-medium rounded-lg opacity-90 group-hover:opacity-100 transition-opacity flex items-center gap-1 shadow-sm">
-                        <Maximize2 className="w-3 h-3" />
-                        <span>Ver foto completa</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {post.tag && (
-                    <div className="mt-2.5">
-                      <span className="inline-block text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                        {post.tag}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Action Bar (Like, Thread Comments, Share) */}
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-stone-100 text-xs">
-                    <div className="flex items-center gap-2">
-                      {/* Like Button */}
-                      <button
-                        onClick={() => onToggleLike(post.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all active:scale-95 ${
-                          post.isLiked
-                            ? 'bg-orange-50 text-orange-600 border border-orange-200'
-                            : 'bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200'
-                        }`}
-                      >
-                        <Heart
-                          className={`w-4 h-4 ${
-                            post.isLiked ? 'fill-orange-500 text-orange-500' : 'text-stone-400'
-                          }`}
-                        />
-                        <span>{post.likes}</span>
-                      </button>
-
-                      {/* Thread Comments Button */}
-                      <button
-                        onClick={() => toggleThread(post.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold transition-all active:scale-95 ${
-                          isThreadExpanded
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                            : 'bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200'
-                        }`}
-                        title="Ver y responder el hilo"
-                      >
-                        <MessageSquare className={`w-4 h-4 ${isThreadExpanded ? 'text-emerald-600 fill-emerald-100' : 'text-stone-400'}`} />
-                        <span>Hilo ({post.commentsCount})</span>
-                        {isThreadExpanded ? (
-                          <ChevronUp className="w-3.5 h-3.5 text-stone-400 ml-0.5" />
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5 text-stone-400 ml-0.5" />
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleShare(post.id)}
-                        className="p-2 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-50 active:scale-95 transition-all"
-                        title="Compartir publicación"
-                      >
-                        {copiedId === post.id ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Share2 className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* THREAD REPLIES SECTION */}
-                {isThreadExpanded && (
-                  <div className="bg-stone-50/70 border-t border-stone-200/90 p-4 sm:p-5 pt-3 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between mb-3 text-xs text-stone-500 font-bold uppercase tracking-wider">
-                      <span>Respuestas en este Hilo ({comments.length})</span>
-                      <button
-                        onClick={() => toggleThread(post.id)}
-                        className="text-stone-400 hover:text-stone-600 lowercase"
-                      >
-                        ocultar hilo
-                      </button>
-                    </div>
-
-                    {/* Thread Replies List */}
-                    <div className="relative space-y-4">
-                      {comments.length > 0 && (
-                        <div className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-emerald-200 -z-0" />
-                      )}
-
-                      {comments.length === 0 ? (
-                        <p className="text-xs text-stone-500 py-2 italic text-center">
-                          Aún no hay respuestas en este hilo. ¡Sé el primer vecino en responder!
-                        </p>
-                      ) : (
-                        comments.map((comment) => (
-                          <div key={comment.id} className="relative z-10 flex items-start gap-3 text-sm">
-                            <div className="relative shrink-0">
-                              <img
-                                src={comment.authorAvatar}
-                                alt={comment.authorName}
-                                className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-xs"
-                              />
-                            </div>
-
-                            <div className="flex-1 bg-white p-3 rounded-2xl border border-stone-200/90 shadow-2xs hover:border-emerald-200 transition-colors">
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-extrabold text-stone-900 text-xs sm:text-sm">
-                                    {comment.authorName}
-                                  </span>
-                                  {comment.authorBadge && (
-                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded">
-                                      {comment.authorBadge}
-                                    </span>
-                                  )}
-                                  <span className="text-[11px] text-stone-400">
-                                    • {comment.timeAgo}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {comment.replyToAuthor && (
-                                <p className="text-[11px] text-stone-500 mb-1 font-medium">
-                                  En respuesta a{' '}
-                                  <span className="text-emerald-700 font-bold">
-                                    @{comment.replyToAuthor}
-                                  </span>
-                                </p>
-                              )}
-
-                              <p className="text-stone-800 text-xs sm:text-sm leading-relaxed">
-                                {comment.content}
-                              </p>
-
-                              <div className="flex items-center gap-4 mt-2 pt-1 border-t border-stone-50 text-xs text-stone-500">
-                                <button
-                                  onClick={() => onToggleCommentLike(post.id, comment.id)}
-                                  className={`flex items-center gap-1 text-[11px] font-bold active:scale-95 transition-all ${
-                                    comment.isLiked
-                                      ? 'text-orange-600 font-extrabold'
-                                      : 'text-stone-500 hover:text-stone-800'
-                                  }`}
-                                >
-                                  <Heart
-                                    className={`w-3.5 h-3.5 ${
-                                      comment.isLiked
-                                        ? 'fill-orange-500 text-orange-500'
-                                        : 'text-stone-400'
-                                    }`}
-                                  />
-                                  <span>{comment.likes}</span>
-                                </button>
-
-                                <button
-                                  onClick={() => {
-                                    setReplyingTo((prev) => ({
-                                      ...prev,
-                                      [post.id]: comment.authorName,
-                                    }));
-                                  }}
-                                  className="flex items-center gap-1 text-[11px] text-stone-500 hover:text-emerald-700 font-semibold active:scale-95 transition-all"
-                                >
-                                  <CornerDownRight className="w-3 h-3 text-stone-400" />
-                                  <span>Responder</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-
-                      {/* REPLY COMPOSER */}
-                      <div className="pt-2">
-                        {replyingToUser && (
-                          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-xl text-xs text-emerald-800 font-semibold mb-2">
-                            <span>Respondiendo a @{replyingToUser}</span>
-                            <button
-                              onClick={() =>
-                                setReplyingTo((prev) => ({ ...prev, [post.id]: undefined }))
-                              }
-                              className="text-emerald-600 hover:text-emerald-900"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-
-                        {commentErrors[post.id] && (
-                          <div className="mb-2 p-2 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-semibold flex items-center gap-1.5">
-                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{commentErrors[post.id]}</span>
-                          </div>
-                        )}
-
-                        <form
-                          onSubmit={(e) => handleSendReply(post.id, e)}
-                          className="flex items-start gap-2.5 bg-white p-2.5 rounded-2xl border border-stone-300 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 shadow-xs transition-all"
-                        >
-                          <img
-                            src={currentUser.avatar}
-                            alt={currentUser.name}
-                            className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 border border-stone-200"
-                          />
-
-                          <div className="flex-1 min-w-0">
-                            <input
-                              type="text"
-                              value={currentReplyText}
-                              onChange={(e) => {
-                                setReplyDrafts((prev) => ({
-                                  ...prev,
-                                  [post.id]: e.target.value,
-                                }));
-                                if (commentErrors[post.id]) {
-                                  setCommentErrors((prev) => ({ ...prev, [post.id]: null }));
-                                }
-                              }}
-                              placeholder={
-                                replyingToUser
-                                  ? `Escribe tu respuesta a ${replyingToUser}...`
-                                  : 'Publica tu respuesta en este hilo...'
-                              }
-                              className="w-full text-xs sm:text-sm text-stone-900 placeholder:text-stone-400 outline-none py-1"
-                            />
-
-                            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-1.5">
-                              {['💡 Gran idea', '🤝 Apoyo total', '👏 Cuenten conmigo', '🐕 Vamos'].map(
-                                (chip) => (
-                                  <button
-                                    key={chip}
-                                    type="button"
-                                    onClick={() => setQuickReply(post.id, chip)}
-                                    className="px-2 py-0.5 rounded-md bg-stone-100 hover:bg-stone-200 text-stone-600 text-[10px] font-bold shrink-0 transition-colors"
-                                  >
-                                    {chip}
-                                  </button>
-                                )
-                              )}
-                            </div>
-                          </div>
-
-                          <button
-                            type="submit"
-                            disabled={!currentReplyText.trim()}
-                            className={`p-2 rounded-xl text-white font-bold transition-all shrink-0 active:scale-95 ${
-                              currentReplyText.trim()
-                                ? 'bg-orange-600 hover:bg-orange-700 shadow-sm'
-                                : 'bg-stone-300 cursor-not-allowed text-stone-400'
-                            }`}
-                            title="Enviar respuesta"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })
-        )}
-      </div>
-
-      {/* CONFIRM DELETE MODAL (Author deletes own thread) */}
-      {confirmDeletePostId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5" />
+                <AlertTriangle aria-hidden="true" className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{profanityError}</span>
               </div>
-              <div>
-                <h3 className="font-extrabold text-stone-900 text-base">¿Borrar este hilo?</h3>
-                <p className="text-xs text-stone-500">Esta acción eliminará tu publicación.</p>
-              </div>
-            </div>
+            ) : null}
 
-            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-              Como autor de este hilo, puedes eliminarlo en cualquier momento. Se borrarán permanentemente tu publicación y todas las respuestas asociadas para toda la comunidad.
-            </p>
-
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setConfirmDeletePostId(null)}
-                className="w-1/2 py-2.5 px-3 rounded-xl border border-stone-300 text-stone-700 font-bold text-xs hover:bg-stone-100 transition-colors"
+                onClick={() => {
+                  setIsWritingPost(false);
+                  setProfanityError(null);
+                }}
+                className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#eef4ef] hover:bg-[#e1ece3] text-[#283c2e] text-xs font-bold cursor-pointer"
               >
                 Cancelar
               </button>
               <button
-                type="button"
-                onClick={handleDeletePostConfirm}
-                className="w-1/2 py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md shadow-rose-600/30 flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                type="submit"
+                className="min-h-[42px] px-4 py-2 rounded-xl bg-[#1f6a42] hover:bg-[#185434] text-white text-xs font-extrabold inline-flex items-center gap-1.5 cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Sí, borrar hilo</span>
+                <Send aria-hidden="true" className="w-3.5 h-3.5" />
+                <span>Publicar hilo</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </form>
+        </section>
+      ) : null}
 
-      {/* LIGHTBOX MODAL FOR EXPANDED ATTACHED IMAGES */}
-      {activeImageModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => setActiveImageModal(null)}
-        >
-          <div 
-            className="relative max-w-3xl max-h-[90vh] bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-stone-700 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="absolute top-3 right-3 z-10">
-              <button
-                type="button"
-                onClick={() => setActiveImageModal(null)}
-                className="p-2 bg-black/70 hover:bg-black text-white rounded-full transition-colors shadow-lg"
-                aria-label="Cerrar foto"
+      {/* Forum Posts List */}
+      {filteredPosts.length > 0 ? (
+        <ul role="list" className="space-y-3 list-none p-0 m-0">
+          {filteredPosts.map((post) => {
+            const isExpanded = Boolean(expandedThreads[post.id]);
+            const comments = post.comments || [];
+            const initial = post.authorName.trim().charAt(0).toUpperCase() || 'V';
+            const replyTarget = replyingTo[post.id];
+            const commentError = commentErrors[post.id];
+
+            return (
+              <li
+                key={post.id}
+                className="bg-white rounded-2xl border border-[#dfe6dd] overflow-hidden"
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <img
-              src={activeImageModal}
-              alt="Foto ampliada del hilo"
-              className="max-h-[82vh] w-auto object-contain rounded-2xl mx-auto"
-            />
-          </div>
+                <article className="p-4 space-y-3">
+                  {/* Author & Category Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        aria-hidden="true"
+                        className="w-9 h-9 rounded-full bg-[#e4f2e8] text-[#1f6a42] font-extrabold text-sm flex items-center justify-center shrink-0"
+                      >
+                        {initial}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-extrabold text-[#16241b] truncate">
+                            {post.authorName}
+                          </p>
+                          <span className="text-xs text-[#596c5f]">· {post.timeAgo}</span>
+                        </div>
+                        {post.authorBadge ? (
+                          <p className="text-xs text-[#526558] truncate">{post.authorBadge}</p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold border ${getCategoryStyle(
+                          post.category
+                        )}`}
+                      >
+                        {post.category}
+                      </span>
+
+                      {post.isOwner ? (
+                        confirmDeletePostId === post.id ? (
+                          <div className="flex items-center gap-1 bg-[#fef2f2] border border-[#f5c2c2] px-2 py-0.5 rounded-full">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeletePost(post.id);
+                                setConfirmDeletePostId(null);
+                              }}
+                              className="text-[11px] font-extrabold text-[#b91c1c] cursor-pointer px-1"
+                            >
+                              Borrar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeletePostId(null)}
+                              className="text-[11px] font-bold text-[#4b5e51] cursor-pointer px-1"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeletePostId(post.id)}
+                            aria-label={`Eliminar publicación de ${post.authorName}`}
+                            className="p-1.5 rounded-full text-[#596c5f] hover:text-[#b91c1c] hover:bg-[#fef2f2] transition-colors cursor-pointer"
+                          >
+                            <Trash2 aria-hidden="true" className="w-3.5 h-3.5" />
+                          </button>
+                        )
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Post Text Content */}
+                  <p className="text-sm text-[#1e3023] leading-relaxed whitespace-pre-line">
+                    {post.content}
+                  </p>
+
+                  {/* Attached Image if present */}
+                  {post.imageUrl ? (
+                    <div className="rounded-xl overflow-hidden border border-[#dfe6dd] bg-[#f4f7f3]">
+                      <img
+                        src={post.imageUrl}
+                        alt={`Imagen compartida por ${post.authorName} en el foro`}
+                        className="w-full max-h-56 object-cover"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : null}
+
+                  {/* Actions Bar: Like & Toggle Comments */}
+                  <div className="pt-1 flex items-center justify-between border-t border-[#edf1ec]">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-pressed={Boolean(post.isLiked)}
+                        onClick={() => onToggleLike(post.id)}
+                        className={`inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1 rounded-full text-xs font-extrabold border transition-colors cursor-pointer ${
+                          post.isLiked
+                            ? 'bg-[#e4f2e8] text-[#1f6a42] border-[#b7dac2]'
+                            : 'bg-[#fafcfa] text-[#35483b] border-[#dfe6dd] hover:bg-[#eef4ef]'
+                        }`}
+                      >
+                        <Heart
+                          aria-hidden="true"
+                          className={`w-3.5 h-3.5 ${post.isLiked ? 'fill-[#1f6a42] text-[#1f6a42]' : ''}`}
+                        />
+                        <span>Apoyar ({post.likes})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        aria-controls={`comments-panel-${post.id}`}
+                        onClick={() => toggleThread(post.id)}
+                        className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1 rounded-full text-xs font-extrabold bg-[#fafcfa] text-[#35483b] border border-[#dfe6dd] hover:bg-[#eef4ef] transition-colors cursor-pointer"
+                      >
+                        <MessageCircle aria-hidden="true" className="w-3.5 h-3.5 text-[#1f6a42]" />
+                        <span>
+                          {comments.length}{' '}
+                          {comments.length === 1 ? 'comentario' : 'comentarios'}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronUp aria-hidden="true" className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronDown aria-hidden="true" className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+
+                {/* Expandable Comments & Reply Form */}
+                {isExpanded ? (
+                  <div
+                    id={`comments-panel-${post.id}`}
+                    className="bg-[#f6f9f5] border-t border-[#dfe6dd] p-3.5 space-y-3"
+                  >
+                    {comments.length > 0 ? (
+                      <ul role="list" className="space-y-2.5 list-none p-0 m-0">
+                        {comments.map((comment) => {
+                          const cInitial =
+                            comment.authorName.trim().charAt(0).toUpperCase() || 'V';
+                          return (
+                            <li
+                              key={comment.id}
+                              className="bg-white p-3 rounded-xl border border-[#dfe6dd] space-y-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span
+                                    aria-hidden="true"
+                                    className="w-7 h-7 rounded-full bg-[#e4f2e8] text-[#1f6a42] font-extrabold text-xs flex items-center justify-center shrink-0"
+                                  >
+                                    {cInitial}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-extrabold text-[#16241b] truncate">
+                                      {comment.authorName}{' '}
+                                      <span className="font-normal text-[#596c5f]">
+                                        · {comment.timeAgo}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    aria-pressed={Boolean(comment.isLiked)}
+                                    onClick={() => onToggleCommentLike(post.id, comment.id)}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border cursor-pointer ${
+                                      comment.isLiked
+                                        ? 'bg-[#e4f2e8] text-[#1f6a42] border-[#b7dac2]'
+                                        : 'bg-[#fafcfa] text-[#4b5e51] border-[#dfe6dd]'
+                                    }`}
+                                  >
+                                    <Heart
+                                      aria-hidden="true"
+                                      className={`w-3 h-3 ${
+                                        comment.isLiked ? 'fill-[#1f6a42] text-[#1f6a42]' : ''
+                                      }`}
+                                    />
+                                    <span>{comment.likes}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setReplyingTo((prev) => ({
+                                        ...prev,
+                                        [post.id]: comment.authorName,
+                                      }))
+                                    }
+                                    className="text-[11px] font-bold text-[#1f6a42] hover:underline px-1.5 py-0.5 cursor-pointer"
+                                  >
+                                    Responder
+                                  </button>
+                                </div>
+                              </div>
+
+                              <p className="text-xs text-[#25372b] leading-relaxed">
+                                {comment.replyToAuthor ? (
+                                  <span className="inline-flex items-center gap-0.5 font-extrabold text-[#1f6a42] mr-1">
+                                    <CornerDownRight aria-hidden="true" className="w-3 h-3" />@
+                                    {comment.replyToAuthor}:
+                                  </span>
+                                ) : null}
+                                {comment.content}
+                              </p>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-[#596c5f] text-center py-1">
+                        Sé el primero en comentar este hilo vecinal.
+                      </p>
+                    )}
+
+                    {/* Reply indicator if replying to a specific neighbor */}
+                    {replyTarget ? (
+                      <div className="flex items-center justify-between px-2.5 py-1 rounded-lg bg-[#e4f2e8] text-[#1f6a42] text-xs font-bold">
+                        <span>Respondiendo a {replyTarget}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReplyingTo((prev) => ({ ...prev, [post.id]: undefined }))
+                          }
+                          className="underline cursor-pointer ml-2"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* Comment form with IME-safe Enter handler */}
+                    <form
+                      aria-label={`Comentar en la publicación de ${post.authorName}`}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submitCommentForPost(post.id);
+                      }}
+                      className="space-y-1.5"
+                    >
+                      <label htmlFor={`comment-input-${post.id}`} className="visually-hidden">
+                        Escribe un comentario para {post.authorName}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`comment-input-${post.id}`}
+                          name="commentText"
+                          type="text"
+                          enterKeyHint="send"
+                          value={replyDrafts[post.id] || ''}
+                          onChange={(e) => handleCommentDraftChange(post.id, e.target.value)}
+                          onCompositionEnd={(e) => {
+                            lastCompositionEndRef.current = e.nativeEvent.timeStamp;
+                          }}
+                          onKeyDown={(e) => handleCommentKeyDown(e, post.id)}
+                          placeholder={
+                            replyTarget
+                              ? `Responder a ${replyTarget}…`
+                              : 'Escribe un comentario…'
+                          }
+                          className="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl border border-[#cbd6c9] bg-white text-xs font-semibold text-[#16241b]"
+                        />
+                        <button
+                          type="submit"
+                          aria-label="Enviar comentario"
+                          className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#1f6a42] hover:bg-[#185434] text-white text-xs font-extrabold inline-flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          <Send aria-hidden="true" className="w-3.5 h-3.5" />
+                          <span>Enviar</span>
+                        </button>
+                      </div>
+
+                      {commentError ? (
+                        <p role="alert" className="text-xs font-bold text-[#b91c1c] px-1">
+                          {commentError}
+                        </p>
+                      ) : null}
+                    </form>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="bg-white p-5 rounded-2xl border border-[#dfe6dd] text-center space-y-2">
+          <p className="text-sm font-semibold text-[#495c4f]">
+            Aún no hay publicaciones en la categoría «{selectedFilter}».
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsWritingPost(true)}
+            className="text-sm font-extrabold text-[#1f6a42] underline py-1 px-2 cursor-pointer"
+          >
+            Crear el primer hilo
+          </button>
         </div>
       )}
     </div>

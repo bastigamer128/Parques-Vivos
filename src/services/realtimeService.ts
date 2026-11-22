@@ -18,6 +18,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { Activity, Attendee, ForumComment, ForumPost } from '../types';
 import {
   V2_INITIAL_ACTIVITIES,
+  INITIAL_POSTS,
   PARQUE_ALMAGRO_BOUNDS_POLYGON,
   formatNeighborShortName,
   normalizeActivityToV2,
@@ -130,6 +131,22 @@ export async function seedInitialDataIfEmpty(): Promise<void> {
       });
 
       await batch.commit();
+    }
+
+    // Seed initial Parque Almagro forum discussions if forum_posts is empty
+    const forumRef = collection(db, 'forum_posts');
+    const forumSnap = await getDocs(forumRef);
+    if (forumSnap.empty && INITIAL_POSTS.length > 0) {
+      const forumBatch = writeBatch(db);
+      INITIAL_POSTS.forEach((post, index) => {
+        const postDoc = doc(db, 'forum_posts', post.id);
+        const cleanPost = sanitizeForFirestore({
+          ...post,
+          createdAt: Date.now() - index * 3600 * 1000,
+        });
+        forumBatch.set(postDoc, cleanPost);
+      });
+      await forumBatch.commit();
     }
   } catch (err) {
     console.error('Error during Firestore v2 initial seeding:', err);
@@ -270,17 +287,91 @@ export async function updateRealtimeAttendance(
   });
 }
 
-// Keep legacy forum/boundary exports so any older module still compiles cleanly
+/**
+ * Real-time subscription to forum_posts collection (Comunidad Parque Almagro).
+ */
 export function subscribeToForumPosts(
-  onUpdate: (posts: ForumPost[]) => void
+  onUpdate: (posts: ForumPost[]) => void,
+  onError?: (error: Error) => void
 ): () => void {
-  onUpdate([]);
-  return () => {};
+  const forumRef = collection(db, 'forum_posts');
+  const deviceId = getDeviceId();
+
+  return onSnapshot(
+    forumRef,
+    (snapshot) => {
+      const items: Array<ForumPost & { _createdAt: number }> = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const likedByUids: string[] = Array.isArray(data.likedByUids) ? data.likedByUids : [];
+        const isLiked = likedByUids.includes(deviceId) || Boolean(data.isLiked);
+        const isOwner = data.authorUid ? data.authorUid === deviceId : Boolean(data.isOwner);
+
+        const rawComments: ForumComment[] = Array.isArray(data.comments)
+          ? data.comments.map((c: any, idx: number) => {
+              const commLikedBy: string[] = Array.isArray(c?.likedByUids) ? c.likedByUids : [];
+              return {
+                id: String(c?.id || `comm-${idx}`),
+                postId: docSnap.id,
+                authorName: formatNeighborShortName(String(c?.authorName || 'Vecino A.')),
+                authorAvatar: String(c?.authorAvatar || ''),
+                authorBadge: c?.authorBadge ? String(c.authorBadge) : 'Vecino · Parque Almagro',
+                timeAgo: String(c?.timeAgo || 'Ahora'),
+                content: String(c?.content || ''),
+                likes: Math.max(Number(c?.likes) || 0, 0),
+                isLiked: commLikedBy.includes(deviceId) || Boolean(c?.isLiked),
+                replyToAuthor: c?.replyToAuthor ? String(c.replyToAuthor) : undefined,
+              };
+            })
+          : [];
+
+        const validCategory: 'Ideas' | 'Reseñas' | 'Panorama' =
+          data.category === 'Reseñas' || data.category === 'Panorama' ? data.category : 'Ideas';
+
+        items.push({
+          id: docSnap.id,
+          authorName: formatNeighborShortName(String(data.authorName || 'Vecino A.')),
+          authorAvatar: String(data.authorAvatar || ''),
+          authorBadge: data.authorBadge ? String(data.authorBadge) : 'Vecino · Parque Almagro',
+          timeAgo: String(data.timeAgo || 'Reciente'),
+          category: validCategory,
+          content: String(data.content || ''),
+          imageUrl: data.imageUrl ? String(data.imageUrl) : undefined,
+          isOwner,
+          likes: Math.max(Number(data.likes) || 0, 0),
+          isLiked,
+          commentsCount: Math.max(Number(data.commentsCount) || rawComments.length, rawComments.length),
+          comments: rawComments,
+          tag: data.tag ? String(data.tag) : undefined,
+          _createdAt: Number(data.createdAt) || 0,
+        });
+      });
+
+      if (items.length > 0) {
+        items.sort((a, b) => b._createdAt - a._createdAt);
+        onUpdate(items.map(({ _createdAt, ...post }) => post));
+      }
+    },
+    (err) => {
+      console.error('Firestore forum_posts snapshot error:', err);
+      if (onError) onError(err);
+    }
+  );
 }
 
 export async function createRealtimeForumPost(post: ForumPost): Promise<void> {
+  const deviceId = getDeviceId();
   const docRef = doc(db, 'forum_posts', post.id);
-  await setDoc(docRef, sanitizeForFirestore(post));
+  await setDoc(
+    docRef,
+    sanitizeForFirestore({
+      ...post,
+      authorName: formatNeighborShortName(post.authorName),
+      authorUid: deviceId,
+      likedByUids: [],
+      createdAt: Date.now(),
+    })
+  );
 }
 
 export async function deleteRealtimeForumPost(postId: string): Promise<void> {
@@ -288,19 +379,54 @@ export async function deleteRealtimeForumPost(postId: string): Promise<void> {
 }
 
 export async function toggleRealtimePostLike(postId: string, currentlyLiked: boolean): Promise<void> {
-  await updateDoc(doc(db, 'forum_posts', postId), {
+  const deviceId = getDeviceId();
+  const docRef = doc(db, 'forum_posts', postId);
+  await updateDoc(docRef, {
     likes: increment(currentlyLiked ? -1 : 1),
+    likedByUids: currentlyLiked ? arrayRemove(deviceId) : arrayUnion(deviceId),
   });
 }
 
 export async function addRealtimeComment(postId: string, comment: ForumComment): Promise<void> {
-  await updateDoc(doc(db, 'forum_posts', postId), {
-    comments: arrayUnion(sanitizeForFirestore(comment)),
+  const docRef = doc(db, 'forum_posts', postId);
+  const cleanComment = sanitizeForFirestore({
+    ...comment,
+    authorName: formatNeighborShortName(comment.authorName),
+  });
+  await updateDoc(docRef, {
+    comments: arrayUnion(cleanComment),
     commentsCount: increment(1),
   });
 }
 
-export async function toggleRealtimeCommentLike(_postId: string, _commentId: string): Promise<void> {}
+export async function toggleRealtimeCommentLike(postId: string, commentId: string): Promise<void> {
+  const deviceId = getDeviceId();
+  const docRef = doc(db, 'forum_posts', postId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const existingComments: any[] = Array.isArray(data.comments) ? [...data.comments] : [];
+  const updatedComments = existingComments.map((comm) => {
+    if (comm?.id !== commentId) return comm;
+    const likedBy: string[] = Array.isArray(comm.likedByUids) ? [...comm.likedByUids] : [];
+    const alreadyLiked = likedBy.includes(deviceId) || Boolean(comm.isLiked);
+    const nextLikedBy = alreadyLiked
+      ? likedBy.filter((uid) => uid !== deviceId)
+      : [...likedBy, deviceId];
+    const currentLikes = Math.max(Number(comm.likes) || 0, 0);
+    return sanitizeForFirestore({
+      ...comm,
+      likes: Math.max(currentLikes + (alreadyLiked ? -1 : 1), 0),
+      likedByUids: nextLikedBy,
+      isLiked: false,
+    });
+  });
+
+  await updateDoc(docRef, {
+    comments: updatedComments,
+  });
+}
 
 export function subscribeToParkBoundaries(
   onUpdate: (coords: [number, number][]) => void
