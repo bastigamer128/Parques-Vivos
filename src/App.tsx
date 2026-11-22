@@ -51,16 +51,18 @@ export default function App() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [preselectedZoneId, setPreselectedZoneId] = useState<SchematicZoneId | undefined>(undefined);
 
-  // Deep-link invitation parameters (?actividad=<id>&invitadoPor=<nombre>)
+  // Deep-link invitation parameters (/invitar/<id>?de=<nombre> or legacy ?actividad=<id>&invitadoPor=<nombre>)
   const [pendingInviteActivityId, setPendingInviteActivityId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
+    const pathMatch = window.location.pathname.match(/^\/invitar\/([^/]+)\/?$/);
+    if (pathMatch?.[1]) return decodeURIComponent(pathMatch[1]);
     const params = new URLSearchParams(window.location.search);
-    return params.get('actividad');
+    return params.get('a') || params.get('actividad');
   });
   const [invitedByName, setInvitedByName] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     const params = new URLSearchParams(window.location.search);
-    const raw = params.get('invitadoPor');
+    const raw = params.get('de') || params.get('invitadoPor');
     return raw ? formatNeighborShortName(raw) : null;
   });
   const [openedViaInvite, setOpenedViaInvite] = useState<boolean>(false);
@@ -159,7 +161,7 @@ export default function App() {
       setOpenedViaInvite(false);
       setInvitedByName(null);
       if (typeof window !== 'undefined') {
-        window.history.replaceState({}, '', window.location.pathname);
+        window.history.replaceState({}, '', '/');
       }
       showToast('La actividad de la invitación ya no está disponible.');
     }
@@ -213,8 +215,8 @@ export default function App() {
   const clearInviteUrlParams = () => {
     setOpenedViaInvite(false);
     setInvitedByName(null);
-    if (typeof window !== 'undefined' && window.location.search) {
-      window.history.replaceState({}, '', window.location.pathname);
+    if (typeof window !== 'undefined' && (window.location.search || window.location.pathname !== '/')) {
+      window.history.replaceState({}, '', '/');
     }
   };
 
@@ -278,7 +280,15 @@ export default function App() {
 
   const handlePublishActivity = async (newActData: Omit<Activity, 'id'>) => {
     const deviceId = getDeviceId();
-    const newId = `act-${Date.now()}`;
+    const slugBase = newActData.title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 14) || 'actividad';
+    const shortCode = Math.random().toString(36).slice(2, 6);
+    const newId = `${slugBase}-${shortCode}`;
     const creatorShort = formatNeighborShortName(newActData.creatorName);
 
     const newActivity: Activity = {

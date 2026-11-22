@@ -304,12 +304,14 @@ export function subscribeToForumPosts(
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const likedByUids: string[] = Array.isArray(data.likedByUids) ? data.likedByUids : [];
-        const isLiked = likedByUids.includes(deviceId) || Boolean(data.isLiked);
+        const safeLikes = Math.max(Number(data.likes) || 0, 0);
+        const isLiked = safeLikes > 0 && likedByUids.includes(deviceId);
         const isOwner = data.authorUid ? data.authorUid === deviceId : Boolean(data.isOwner);
 
         const rawComments: ForumComment[] = Array.isArray(data.comments)
           ? data.comments.map((c: any, idx: number) => {
               const commLikedBy: string[] = Array.isArray(c?.likedByUids) ? c.likedByUids : [];
+              const safeCommLikes = Math.max(Number(c?.likes) || 0, 0);
               return {
                 id: String(c?.id || `comm-${idx}`),
                 postId: docSnap.id,
@@ -318,8 +320,8 @@ export function subscribeToForumPosts(
                 authorBadge: c?.authorBadge ? String(c.authorBadge) : 'Vecino · Parque Almagro',
                 timeAgo: String(c?.timeAgo || 'Ahora'),
                 content: String(c?.content || ''),
-                likes: Math.max(Number(c?.likes) || 0, 0),
-                isLiked: commLikedBy.includes(deviceId) || Boolean(c?.isLiked),
+                likes: safeCommLikes,
+                isLiked: safeCommLikes > 0 && commLikedBy.includes(deviceId),
                 replyToAuthor: c?.replyToAuthor ? String(c.replyToAuthor) : undefined,
               };
             })
@@ -338,7 +340,7 @@ export function subscribeToForumPosts(
           content: String(data.content || ''),
           imageUrl: data.imageUrl ? String(data.imageUrl) : undefined,
           isOwner,
-          likes: Math.max(Number(data.likes) || 0, 0),
+          likes: safeLikes,
           isLiked,
           commentsCount: Math.max(Number(data.commentsCount) || rawComments.length, rawComments.length),
           comments: rawComments,
@@ -381,9 +383,17 @@ export async function deleteRealtimeForumPost(postId: string): Promise<void> {
 export async function toggleRealtimePostLike(postId: string, currentlyLiked: boolean): Promise<void> {
   const deviceId = getDeviceId();
   const docRef = doc(db, 'forum_posts', postId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const existingLikes = Math.max(Number(data.likes) || 0, 0);
+  const nextLikes = Math.max(existingLikes + (currentlyLiked ? -1 : 1), 0);
+
   await updateDoc(docRef, {
-    likes: increment(currentlyLiked ? -1 : 1),
+    likes: nextLikes,
     likedByUids: currentlyLiked ? arrayRemove(deviceId) : arrayUnion(deviceId),
+    isLiked: false,
   });
 }
 

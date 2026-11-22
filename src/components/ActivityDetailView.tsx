@@ -102,13 +102,17 @@ export const ActivityDetailView: React.FC<ActivityDetailViewProps> = ({
   const formattedInviter = rawInviter ? formatNeighborShortName(rawInviter) : '';
 
   const buildShareUrl = (): string => {
-    if (typeof window === 'undefined') {
-      return `https://parques-vivos.vercel.app/?actividad=${encodeURIComponent(activity.id)}`;
+    const officialOrigin = 'https://parques-vivos.vercel.app';
+    let baseOrigin = officialOrigin;
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host.includes('parques-vivos') || host === 'localhost' || host === '127.0.0.1') {
+        baseOrigin = window.location.origin;
+      }
     }
-    const url = new URL(window.location.pathname, window.location.origin);
-    url.searchParams.set('actividad', activity.id);
+    const url = new URL(`/invitar/${encodeURIComponent(activity.id)}`, baseOrigin);
     if (formattedInviter) {
-      url.searchParams.set('invitadoPor', formattedInviter);
+      url.searchParams.set('de', formattedInviter);
     }
     return url.toString();
   };
